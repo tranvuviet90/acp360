@@ -1,0 +1,135 @@
+/* ===== NỀN & BỐ CỤC CHUNG ===== */
+body {
+  margin: 0;
+  background: #f8f6f2;
+  color: #222;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Helvetica Neue", sans-serif;
+}
+.page-wrap { width: 100%; }
+.page-inner { max-width: 1100px; margin: 0 auto; padding: 12px; }
+
+.page-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.page-title { margin: 0 0 12px 0; color: #E88E2E; }
+
+.export-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* ===== THẺ, FORM, HÀNG/CỘT ===== */
+.card {
+  background: #fff;
+  border: 1px solid #FFD8A8;
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 12px;
+  box-shadow: 0 1px 8px #e88e2e11;
+}
+.row { display: flex; align-items: center; gap: 10px; }
+.row.between { justify-content: space-between; }
+
+.form-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #FFD8A8;
+  border-radius: 8px;
+  background: #fff;
+}
+.textarea { min-height: 64px; resize: vertical; }
+.dropdown {
+  width: 100%;
+  max-height: 240px;
+  overflow: auto;
+  border: 1px solid #FFD8A8;
+  border-radius: 8px;
+  background: #fff;
+  padding: 8px;
+}
+
+/* ===== NÚT ===== */
+.btn { border: none; background: #f3f3f3; padding: 8px 12px; border-radius: 8px; cursor: pointer; }
+.btn-ghost { background: #fff; border: 1px solid #FFD8A8; color: #E88E2E; }
+.btn-orange { background: #E88E2E; color: #fff; }
+.btn-green { background: #107c41; color: #fff; }
+.btn-blue { background: #1f80e0; color: #fff; }
+.btn-excel { background: #107c41; color: #fff; }
+.btn-x { border: none; background: transparent; color: #d32f2f; font-weight: 800; font-size: 16px; line-height: 1; cursor: pointer; padding: 6px; }
+
+.ml-auto { margin-left: auto; }
+.bold { font-weight: 700; }
+.mt6 { margin-top: 6px; }
+.mt8 { margin-top: 8px; }
+.prewrap { white-space: pre-wrap; }
+.filehint { font-style: italic; font-size: 13px; color: #666; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ===== BẢNG & KHUNG CUỘN ===== */
+.table-wrap { width: 100%; overflow-x: auto; }
+.table { width: 100%; border-collapse: collapse; min-width: 760px; }
+.table th, .table td { padding: 8px 10px; border-bottom: 1px solid #f0e2cf; vertical-align: top; text-align: left; }
+.table thead th { background: #ffe9cf; color: #333; position: sticky; top: -1px; }
+
+/* ===== THUMBNAIL & XEM ẢNH ===== */
+.thumb-list { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.thumb { width: 88px; height: 88px; object-fit: cover; border-radius: 6px; border: 1px solid #eee; cursor: pointer; }
+.img-view { max-width: 90vw; max-height: 90vh; border-radius: 8px; }
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.8); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+
+/* ===== LƯỚI NỘI DUNG (nếu trang dùng) ===== */
+.content-grid { display: grid; grid-template-columns: 1fr 1fr 260px; gap: 12px; }
+.sidebar .dept-list { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.dept { width: 100%; background: #fbeede; border: 1px solid #f0c9a8; border-radius: 10px; padding: 10px 12px; text-align: left; cursor: pointer; }
+.dept.active { background: #E88E2E; color: #fff; border-color: #E88E2E; }
+
+/* ===== MODAL CHUNG ===== */
+.modal { background: #fff; border-radius: 12px; padding: 16px; width: min(540px, 92vw); box-shadow: 0 8px 30px rgba(0,0,0,.2); }
+
+/* ===== MOBILE ===== */
+@media (max-width: 992px) {
+  .content-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 768px) {
+  .page-inner { padding: 10px; }
+  .btn, .input { font-size: 15px; }
+  .thumb { width: 72px; height: 72px; }
+  .content-grid { grid-template-columns: 1fr; }
+  .table { min-width: 660px; }
+}
+
+/* ===== MÀN HÌNH TẢI TRANG (LOADING SCREEN) ===== */
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100vw;
+  height: 100vh;
+  background: linear-gradient(to bottom right, #FFD8A8, #E88E2E);
+  color: #222;
+  font-size: 1.5rem;
+  font-weight: bold;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Helvetica Neue", sans-serif;
+}
+
+/* =================================================================
+   THÊM MỚI: CSS CHO SỐ THÔNG BÁO TRÊN ICON
+   ================================================================= */
+.icon-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notification-badge {
+  position: absolute;
+  top: -8px;      /* Điều chỉnh vị trí theo chiều dọc */
+  right: -8px;    /* Điều chỉnh vị trí theo chiều ngang */
+  background-color: red;
+  color: white;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  font-size: 12px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid white; /* Tạo viền trắng xung quanh */
+}

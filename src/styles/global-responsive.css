@@ -1,0 +1,98 @@
+/* Header layout */
+.app-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: flex-end;
+  flex-wrap: nowrap;     /* LUÔN nằm trên 1 dòng để không đè chồng */
+  min-width: 0;
+}
+
+.app-header-logo {
+  height: 54px;
+  width: auto;
+  max-width: 40vw;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+/* Logout button — sáng, gọn, không "cục đen" */
+.btn-logout {
+  background: transparent;
+  border: 1.5px solid rgba(255,255,255,.65);
+  color: #fff;
+  border-radius: 10px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1;
+  white-space: nowrap;
+  transition: background .15s ease, border-color .15s ease;
+}
+.btn-logout:hover {
+  background: rgba(255,255,255,.12);
+  border-color: #fff;
+}
+
+/* Language pill switcher — gọn & sáng */
+.lang-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+  background: #f1f3f5;
+  border: 1px solid #e5e7eb;
+}
+.lang-switcher .lang-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  color: #475569;
+  cursor: pointer;
+  line-height: 1;
+  transition: background .15s ease, color .15s ease, box-shadow .15s ease;
+}
+.lang-switcher .lang-btn:hover { background: #e9ecef; }
+.lang-switcher .lang-btn.active {
+  background: #111827;
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(0,0,0,.15);
+}
+
+@media (max-width: 520px) {
+  .app-header-logo { height: 44px; max-width: 36vw; }
+  .btn-logout { padding: 5px 10px; font-size: 12px; }
+  .lang-switcher .lang-btn { padding: 5px 9px; font-size: 11px; }
+}
+/* ====== FIX: Header logo không bị phóng to ====== */
+.app-header-logo {
+  height: 56px !important;      /* cố định chiều cao header */
+  max-height: 56px !important;
+  width: auto !important;       /* không cho width:100% từ global ảnh hưởng */
+  max-width: min(40vw, 220px);  /* giới hạn theo viewport và giá trị cứng */
+  object-fit: contain;
+  display: block;               /* tránh inline-img bị co kéo kỳ lạ */
+  flex-shrink: 0;
+}
+
+/* Ưu tiên cao hơn nếu có rule img { width:100% } ở nơi khác */
+header .app-header-logo,
+.app-header-right .app-header-logo {
+  width: auto !important;
+}
+
+/* Mobile: co lại */
+@media (max-width: 520px) {
+  .app-header-logo {
+    height: 44px !important;
+    max-height: 44px !important;
+    max-width: min(36vw, 180px);
+  }
+}

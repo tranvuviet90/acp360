@@ -1,0 +1,157 @@
+/* =========================
+   MAGIC MENU – LAYOUT CƠ BẢN
+   ========================= */
+.magic-navigation {
+  position: relative;
+  width: 100%;
+  user-select: none;
+}
+
+.magic-navigation ul {
+  position: relative;            /* để indicator bám theo ul */
+  display: flex;
+  flex-wrap: wrap;               /* cho phép xuống dòng khi chật */
+  align-items: center;
+  justify-content: center;
+  gap: 10px 18px;                /* khoảng cách giữa các item */
+  padding: 10px 8px;
+  margin: 0;
+  list-style: none;
+  min-height: 64px;              /* giữ chiều cao tối thiểu */
+}
+
+/* =========================
+   ITEM
+   ========================= */
+.magic-navigation .list {
+  position: relative;            /* làm mốc cho icon/badge */
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 72px;
+  min-height: 58px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: background 0.18s ease, transform 0.18s ease;
+  z-index: 1;                    /* cao hơn indicator */
+}
+
+.magic-navigation .list:hover {
+  background: rgba(255,255,255,0.08);
+  transform: translateY(-1px);
+}
+
+.magic-navigation .list a {
+  text-decoration: none;
+  color: #fff;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Icon + badge */
+.magic-navigation .list .icon {
+  position: relative;            /* mốc đặt badge */
+  font-size: 22px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+}
+
+/* Hiệu ứng mượt cho SVG */
+.magic-navigation .list .icon svg {
+  transition: transform 0.25s cubic-bezier(.22,.61,.36,1),
+              color 0.25s cubic-bezier(.22,.61,.36,1);
+}
+
+/* Nhãn dưới icon */
+.magic-navigation .list .text {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  white-space: nowrap;
+  text-align: center;
+  opacity: .95;
+}
+
+/* Trạng thái active */
+.magic-navigation .list.active {
+  background: rgba(255,255,255,0.10);
+}
+
+.magic-navigation .list.active .icon svg {
+  transform: scale(1.9) translateY(-2px);
+}
+
+/* Trạng thái disabled */
+.magic-navigation .list.disabled {
+  opacity: .45;
+  pointer-events: none;
+  filter: grayscale(0.2);
+}
+
+/* =========================
+   BADGE THÔNG BÁO
+   ========================= */
+.notification-badge-magic {
+  position: absolute;
+  top: -6px;
+  right: -10px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #ef4444;           /* đỏ */
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 18px;
+  text-align: center;
+  box-shadow: 0 0 0 2px rgba(0,0,0,.15),
+              0 2px 8px rgba(0,0,0,.25);
+}
+
+/* =========================
+   INDICATOR – VÒNG TRÒN SAU ICON (ĐÃ ẨN)
+   ========================= */
+.magic-navigation .indicator {
+  display: none !important;
+}
+
+/* =========================
+   RESPONSIVE
+   ========================= */
+@media (max-width: 540px) {
+  .magic-navigation ul {
+    gap: 8px 12px;
+    padding: 8px 6px;
+    min-height: 58px;
+  }
+  .magic-navigation .list {
+    min-width: 66px;
+    min-height: 54px;
+    padding: 6px 8px;
+    border-radius: 12px;
+  }
+  .magic-navigation .list .icon {
+    width: 26px;
+    height: 26px;
+    font-size: 20px;
+  }
+  .magic-navigation .list .text {
+    font-size: 11px;
+  }
+  .notification-badge-magic {
+    top: -6px;
+    right: -8px;
+    min-width: 16px;
+    height: 16px;
+    line-height: 16px;
+    font-size: 9px;
+  }
+}

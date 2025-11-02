@@ -1,0 +1,10 @@
+{
+  "projects": {
+    "default": "acp360",
+    "ehs-acp": "solar-climber-464307-p6",
+    "y": "acp360",
+    "acp360": "acp360"
+  },
+  "targets": {},
+  "etags": {}
+}

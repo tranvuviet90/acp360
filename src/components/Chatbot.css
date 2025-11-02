@@ -1,0 +1,71 @@
+/* src/components/Chatbot.css */
+#chat-widget { position: fixed; bottom: 20px; right: 20px; width: 370px; height: 500px; background: white; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); display: flex; flex-direction: column; z-index: 1000; }
+#chat-header { background: #E88E2E; color: white; padding: 15px; border-top-left-radius: 10px; border-top-right-radius: 10px; }
+#chat-header h2 { margin: 0; font-size: 1.1em; }
+#chat-body { flex-grow: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+.message { max-width: 80%; padding: 10px 15px; border-radius: 18px; line-height: 1.4; }
+.message.ai { background-color: #f1f0f0; color: #333; align-self: flex-start; }
+.message.user { background-color: #E88E2E; color: white; align-self: flex-end; }
+#chat-footer { padding: 10px; display: flex; border-top: 1px solid #ddd; }
+#chat-footer input { flex-grow: 1; border: 1px solid #ccc; border-radius: 20px; padding: 10px 15px; font-size: 1em; }
+#chat-footer button { background: #E88E2E; color: white; border: none; border-radius: 20px; padding: 0 15px; margin-left: 10px; cursor: pointer; font-weight: bold; }
+.loading span { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background-color: #aaa; margin: 0 2px; animation: bounce 1.4s infinite ease-in-out both; }
+.loading span:nth-child(1) { animation-delay: -0.32s; } .loading span:nth-child(2) { animation-delay: -0.16s; }
+@keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1.0); } }
+
+/* ================================================= */
+/* THÊM MỚI: CSS cho Icon nổi và nút Đóng            */
+/* ================================================= */
+
+#chat-icon-button {
+  position: fixed;
+  bottom: 30px;
+  right: 30px;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background-color: #E88E2E; /* Màu chính của bạn */
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  z-index: 999;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: transform 0.2s ease-in-out;
+}
+
+#chat-icon-button:hover {
+  transform: scale(1.1);
+}
+
+#chat-icon-button img {
+  width: 36px;
+  height: 36px;
+}
+
+/* Style cho cửa sổ chat để nó không bị che mất icon */
+#chat-widget {
+  /* ... giữ nguyên các style cũ của bạn ... */
+  z-index: 1000;
+}
+
+/* Style cho header để chứa nút đóng */
+#chat-header {
+    /* ... giữ nguyên các style cũ của bạn ... */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* Style cho nút đóng (X) */
+.close-btn {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 24px;
+    font-weight: bold;
+    cursor: pointer;
+    padding: 0 10px;
+    line-height: 1;
+}
