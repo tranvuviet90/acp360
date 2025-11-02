@@ -1,0 +1,47 @@
+# Tên của quy trình tự động
+name: Build and Deploy to Firebase
+
+# Kích hoạt quy trình này khi có 'push' (đẩy code) lên nhánh 'main'
+on:
+  push:
+    branches:
+      - main  # <-- KIỂM TRA: Đây có phải nhánh chính của bạn không?
+
+jobs:
+  build_and_deploy:
+    # Sử dụng máy ảo Ubuntu mới nhất để chạy
+    runs-on: ubuntu-latest
+    
+    steps:
+      # Bước 1: Tải mã code của bạn từ kho về máy ảo
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Bước 2: Cài đặt Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          # THAY ĐỔI phiên bản Node.js nếu dự án của bạn yêu cầu
+          node-version: '18' 
+
+      # Bước 3: Cài đặt các gói phụ thuộc (npm install)
+      - name: Install dependencies
+        run: npm install
+
+      # Bước 4: Chạy lệnh build (npm run build)
+      - name: Build project
+        run: npm run build
+
+      # Bước 5: Deploy lên Firebase
+      - name: Deploy to Firebase Hosting
+        uses: w9jds/firebase-action@master
+        with:
+          action: deploy
+          # RẤT QUAN TRỌNG: Thay 'acp360' bằng ID dự án Firebase của bạn
+          project_name: 'acp360' # <-- THAY ĐỔI NẾU CẦN
+          
+          # Sử dụng token bạn đã lưu trong Secrets
+          token: ${{ secrets.FIREBASE_TOKEN }}
+          
+          # Chỉ deploy phần hosting (hoặc thay đổi nếu bạn deploy cả functions)
+          only: 'hosting'
