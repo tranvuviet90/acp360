@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import Login from "./components/Login";
 import GembaCheckList from "./components/gembachecklist";
 import TuGemba from "./components/TuGemba";
-import BoDam from "./components/BoDam";
+import Bodam from "./components/BoDam";
 import CaLamViec from "./components/CaLamViec";
 import HutThuocToilet from "./components/HutThuocToilet";
 import GiaiLaoChat from "./components/GiaiLaoChat";
