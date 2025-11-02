@@ -32,16 +32,11 @@ jobs:
       - name: Build project
         run: npm run build
 
-      # Bước 5: Deploy lên Firebase
+      # Bước 5: Deploy lên Firebase (sử dụng action chính thức)
       - name: Deploy to Firebase Hosting
-        uses: w9jds/firebase-action@master
+        uses: FirebaseExtended/action-hosting-deploy@v0
         with:
-          action: deploy
-          # RẤT QUAN TRỌNG: Thay 'acp360' bằng ID dự án Firebase của bạn
-          project_name: 'acp360' # <-- THAY ĐỔI NẾU CẦN
-          
-          # Sử dụng token bạn đã lưu trong Secrets
-          token: ${{ secrets.FIREBASE_TOKEN }}
-          
-          # Chỉ deploy phần hosting (hoặc thay đổi nếu bạn deploy cả functions)
-          only: 'hosting'
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          channelId: live
+          projectId: acp360  # <-- QUAN TRỌNG: Đảm bảo đây là Project ID của bạn
