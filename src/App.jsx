@@ -3,7 +3,7 @@ import Login from "./components/Login";
 import GembaCheckList from "./components/gembachecklist";
 import TuGemba from "./components/TuGemba";
 import Bodam from "./components/Bodam";
-import CaLamViec from "./components/CaLamViec";
+import Calamviec from "./components/Calamviec";
 import HutThuocToilet from "./components/HutThuocToilet";
 import GiaiLaoChat from "./components/GiaiLaoChat";
 import GiamSatNhaRac from "./components/GiamSatNhaRac";
