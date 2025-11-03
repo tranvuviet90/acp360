@@ -17,7 +17,7 @@ function Bodam({ user, isMobile }) {
   const userRole = (user && user.role) ? user.role.toLowerCase() : '';
 
   useEffect(() => {
-    const docRef = doc(db, "Bodam", "status");
+    const docRef = doc(db, "bodam", "status");
     const unsub = onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists() && docSnap.data().status) {
         setStatus(docSnap.data().status);
@@ -36,7 +36,7 @@ function Bodam({ user, isMobile }) {
       ? { ...currentItem, checked: false, name: "" }
       : { ...currentItem, checked: true, name: user.name };
       
-    await setDoc(doc(db, "Bodam", "status"), { status: newStatus });
+    await setDoc(doc(db, "bodam", "status"), { status: newStatus });
   }
 
   async function handleToggleUnavailable(idx) {
@@ -50,7 +50,7 @@ function Bodam({ user, isMobile }) {
         checked: false,
         name: '' 
     };
-    await setDoc(doc(db, "Bodam", "status"), { status: newStatus });
+    await setDoc(doc(db, "bodam", "status"), { status: newStatus });
   }
 
   return (
