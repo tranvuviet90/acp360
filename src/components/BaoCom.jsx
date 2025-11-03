@@ -192,10 +192,16 @@ const NumberInput = React.memo(function NumberInput({ value, onChange, min = 0, 
         placeholder={placeholder}
         onChange={handleInputChange}
         onFocus={(e) => {
-          // Giữ focus khi tap nhanh trên Android (sửa lỗi mất focus)
-          setTimeout(() => {
-            e.target.setSelectionRange?.(0, String(e.target.value || '').length);
-          }, 0);
+  try {
+    const el = e.target;
+    if (typeof el.setSelectionRange === 'function' && el.type !== 'number') {
+      const len = String(el.value || '').length;
+      setTimeout(() => el.setSelectionRange(0, len), 0);
+    }
+  } catch (_) {
+    // ignore
+  }
+}}, 0);
         }}
         style={{ width: 80, padding: 6, textAlign: 'center', borderRadius: 8, border: '1px solid #ddd', touchAction: 'manipulation', ...style }}
       />
