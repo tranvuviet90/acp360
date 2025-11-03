@@ -158,7 +158,7 @@ export default function App() {
     <GembaCheckList newErrorCounts={gembaNotifCounts} setGembaNotifCounts={setGembaNotifCounts} />,
     <TuGemba newLogCounts={tuGembaNotifCounts} setTuGembaNotifCounts={setTuGembaNotifCounts} />,
     <Bodam />,
-    <CaLamViec />,
+    <Calamviec />,
     <HutThuocToilet />,
     <GiaiLaoChat />,
     <GiamSatNhaRac />,
