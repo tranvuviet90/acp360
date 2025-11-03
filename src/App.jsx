@@ -157,7 +157,7 @@ export default function App() {
   const tabComponents = [
     <GembaCheckList newErrorCounts={gembaNotifCounts} setGembaNotifCounts={setGembaNotifCounts} />,
     <TuGemba newLogCounts={tuGembaNotifCounts} setTuGembaNotifCounts={setTuGembaNotifCounts} />,
-    <BoDam />,
+    <Bodam />,
     <CaLamViec />,
     <HutThuocToilet />,
     <GiaiLaoChat />,
