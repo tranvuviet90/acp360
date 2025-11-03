@@ -1,11 +1,17 @@
 # Tên của quy trình tự động
-name: Build and Deploy to Firebase
+name: Build, Test, and Deploy
 
-# Kích hoạt quy trình này khi có 'push' (đẩy code) lên nhánh 'main'
+# --- THAY ĐỔI 1: KÍCH HOẠT ---
+# Kích hoạt khi:
 on:
+  # 1. Có 'push' (đẩy code hoặc gộp PR) lên nhánh 'main'
   push:
     branches:
-      - main  # <-- KIỂM TRA: Đây có phải nhánh chính của bạn không?
+      - main
+  # 2. Có 'pull_request' (mở PR) nhắm vào nhánh 'main'
+  pull_request:
+    branches:
+      - main
 
 jobs:
   build_and_deploy:
@@ -13,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      # Bước 1: Tải mã code của bạn từ kho về máy ảo
+      # Bước 1: Tải mã code (của PR hoặc của main)
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -21,7 +27,6 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          # THAY ĐỔI phiên bản Node.js nếu dự án của bạn yêu cầu
           node-version: '20' 
 
       # Bước 3: Cài đặt các gói phụ thuộc (npm install)
@@ -29,14 +34,18 @@ jobs:
         run: npm install
 
       # Bước 4: Chạy lệnh build (npm run build)
+      # (Bước này sẽ chạy trên cả PR và push để kiểm tra lỗi)
       - name: Build project
         run: npm run build
 
-      # Bước 5: Deploy lên Firebase (sử dụng action chính thức)
+      # --- THAY ĐỔI 2: ĐIỀU KIỆN DEPLOY ---
+      # Bước 5: Deploy lên Firebase
+      # Chỉ chạy bước này NẾU đây là một PUSH (gộp) vào nhánh MAIN
       - name: Deploy to Firebase Hosting
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           channelId: live
-          projectId: acp360  # <-- QUAN TRỌNG: Đảm bảo đây là Project ID của bạn
+          projectId: acp360 # <-- Đảm bảo đây là Project ID của bạn
