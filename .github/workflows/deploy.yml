@@ -22,7 +22,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           # THAY ĐỔI phiên bản Node.js nếu dự án của bạn yêu cầu
-          node-version: '20' 
+          node-version: '19.1.0' 
 
       # Bước 3: Cài đặt các gói phụ thuộc (npm install)
       - name: Install dependencies
