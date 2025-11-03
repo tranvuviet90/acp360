@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { db } from "../firebase";
 import { doc, setDoc, onSnapshot } from "firebase/firestore";
 
-const boDams = [
+const Bodams = [
   "Bộ đàm 1", "Bộ đàm 2", "Bộ đàm 3", "Bộ đàm 4",
   "Bộ đàm 5", "Bộ đàm 6", "Bộ đàm 7"
 ];
@@ -12,12 +12,12 @@ const orangeLight = "#FFD8A8";
 const dark = "#222";
 const red = "#d9534f";
 
-function BoDam({ user, isMobile }) {
-  const [status, setStatus] = useState(() => boDams.map(() => ({ checked: false, name: "", unavailable: false })));
+function Bodam({ user, isMobile }) {
+  const [status, setStatus] = useState(() => Bodams.map(() => ({ checked: false, name: "", unavailable: false })));
   const userRole = (user && user.role) ? user.role.toLowerCase() : '';
 
   useEffect(() => {
-    const docRef = doc(db, "bodam", "status");
+    const docRef = doc(db, "Bodam", "status");
     const unsub = onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists() && docSnap.data().status) {
         setStatus(docSnap.data().status);
@@ -36,7 +36,7 @@ function BoDam({ user, isMobile }) {
       ? { ...currentItem, checked: false, name: "" }
       : { ...currentItem, checked: true, name: user.name };
       
-    await setDoc(doc(db, "bodam", "status"), { status: newStatus });
+    await setDoc(doc(db, "Bodam", "status"), { status: newStatus });
   }
 
   async function handleToggleUnavailable(idx) {
@@ -50,7 +50,7 @@ function BoDam({ user, isMobile }) {
         checked: false,
         name: '' 
     };
-    await setDoc(doc(db, "bodam", "status"), { status: newStatus });
+    await setDoc(doc(db, "Bodam", "status"), { status: newStatus });
   }
 
   return (
@@ -62,7 +62,7 @@ function BoDam({ user, isMobile }) {
       {isMobile ? (
         // Giao diện Thẻ trên Mobile
         <div>
-          {boDams.map((item, idx) => (
+          {Bodams.map((item, idx) => (
             <div key={idx} style={{
               background: idx % 2 ? "#fff6ea" : "#fff",
               opacity: status[idx]?.unavailable ? 0.5 : 1,
@@ -134,7 +134,7 @@ function BoDam({ user, isMobile }) {
             </tr>
           </thead>
           <tbody>
-            {boDams.map((item, idx) => (
+            {Bodams.map((item, idx) => (
               <tr key={idx} style={{ background: idx % 2 ? "#fff6ea" : "#fff", opacity: status[idx]?.unavailable ? 0.5 : 1 }}>
                 <td style={{ padding: "15px 22px", fontWeight: 600, color: dark }}>{item}</td>
                 <td style={{ padding: "15px 22px" }}>
@@ -194,4 +194,4 @@ function BoDam({ user, isMobile }) {
   );
 }
 
-export default BoDam;
+export default Bodam;
