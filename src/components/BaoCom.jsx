@@ -192,12 +192,23 @@ const NumberInput = React.memo(function NumberInput({ value, onChange, min = 0, 
         placeholder={placeholder}
         onChange={handleInputChange}
         onFocus={(e) => {
-  try {
-    const el = e.target;
-    if (typeof el.setSelectionRange === 'function' && el.type !== 'number') {
-      const len = String(el.value || '').length;
-      setTimeout(() => el.setSelectionRange(0, len), 0);
-    }
+  // Trên input type="number" nhiều trình duyệt không hỗ trợ select/selection range.
+  const el = e.currentTarget;
+  if (!el || el.type === 'number') return;
+
+  const len = String(el.value || '').length;
+
+  // Dùng rAF để đợi focus ổn định (an toàn cho Android)
+  if (typeof el.setSelectionRange === 'function') {
+    requestAnimationFrame(() => {
+      try {
+        el.setSelectionRange(0, len);
+      } catch (err) {
+        // bỏ qua: một số trình duyệt vẫn chặn trên input đặc biệt
+      }
+    });
+  }
+}}
   } catch (_) {
     // ignore
   }
