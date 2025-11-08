@@ -1,4 +1,4 @@
-// File: gembachecklist.jsx (Phiên bản đã sửa lỗi hoàn chỉnh)
+// File: GembaCheckList.jsx (Phiên bản đã sửa lỗi hoàn chỉnh)
 // Đã có key={dep.name} và các sửa lỗi khác.
 
 import React, { useState, useEffect, useRef } from "react";

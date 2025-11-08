@@ -185,7 +185,7 @@ const NumberInput = React.memo(function NumberInput({ value, onChange, min = 0, 
       </button>
 
       <input
-        type="number"
+        type="text"
         inputMode="numeric"
         min={min}
         value={shown}
@@ -1339,7 +1339,7 @@ function ExportBaoComModal({ onClose }) {
       // Xuất file Excel sau khi điền xong
       const outFileName = `BaoCom_${mm}_${yyyy}.xlsx`;
       const out = await wb.xlsx.writeBuffer();
-      saveAs(new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), outFileName);
+      saveAs(new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheet.sheet" }), outFileName);
 
       alert("Xuất báo cáo thành công!");
       onClose();

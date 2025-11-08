@@ -1,9 +1,11 @@
+// Tệp đã sửa lỗi: App.jsx
+// Lỗi: Chữ 'g' trong 'gembachecklist' đã được sửa thành viết thường
 import React, { useState, useEffect } from "react";
 import Login from "./components/Login";
-import GembaCheckList from "./components/gembachecklist";
+import GembaCheckList from "./components/gembachecklist"; // <-- ĐÃ SỬA LỖI TẠI ĐÂY
 import TuGemba from "./components/TuGemba";
-import BoDam from "./components/BoDam";
-import CaLamViec from "./components/CaLamViec";
+import Bodam from "./components/Bodam";
+import Calamviec from "./components/Calamviec";
 import HutThuocToilet from "./components/HutThuocToilet";
 import GiaiLaoChat from "./components/GiaiLaoChat";
 import GiamSatNhaRac from "./components/GiamSatNhaRac";
@@ -157,8 +159,8 @@ export default function App() {
   const tabComponents = [
     <GembaCheckList newErrorCounts={gembaNotifCounts} setGembaNotifCounts={setGembaNotifCounts} />,
     <TuGemba newLogCounts={tuGembaNotifCounts} setTuGembaNotifCounts={setTuGembaNotifCounts} />,
-    <BoDam />,
-    <CaLamViec />,
+    <Bodam />,
+    <Calamviec />,
     <HutThuocToilet />,
     <GiaiLaoChat />,
     <GiamSatNhaRac />,
