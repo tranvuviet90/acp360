@@ -1,8 +1,8 @@
 // Tệp đã sửa lỗi: App.jsx
-// Lỗi: Chữ 'g' trong 'gembachecklist' đã được sửa thành viết thường
+// Đã thêm logic để không fetch-count nếu là vai trò 'Bộ phận' hoặc 'Nhà Ăn'
 import React, { useState, useEffect } from "react";
 import Login from "./components/Login";
-import GembaCheckList from "./components/gembachecklist"; // <-- ĐÃ SỬA LỖI TẠI ĐÂY
+import GembaCheckList from "./components/gembachecklist";
 import TuGemba from "./components/TuGemba";
 import Bodam from "./components/Bodam";
 import Calamviec from "./components/Calamviec";
@@ -120,6 +120,26 @@ export default function App() {
 
   useEffect(() => {
     if (!user) return;
+
+    // =================================================================
+    // === BẮT ĐẦU SỬA LỖI 403 (Permission Denied) CHO VAI TRÒ BỘ PHẬN ===
+    // =================================================================
+    const roleN = normalizeRole(user.role);
+    const isDept = deptRolesNormalized.has(roleN);
+    const isCanteen = roleN === CANTEEN_NORMALIZED;
+
+    // Nếu là vai trò 'Bộ phận' hoặc 'Nhà ăn', họ không cần xem
+    // thông báo Gemba/TuGemba (vì menu bị ẩn).
+    // Bỏ qua việc fetch counts để tránh lỗi 403 và tối ưu.
+    if (isDept || isCanteen) {
+      setGembaNotifCounts({});
+      setTuGembaNotifCounts({});
+      return; // Dừng lại, không chạy fetch counts
+    }
+    // =================================================================
+    // === KẾT THÚC SỬA LỖI 403                                       ===
+    // =================================================================
+
     const fetchCountsForTab = async (collectionName, storageKey, setCountFunction) => {
       const lastSeenTimestamps = JSON.parse(localStorage.getItem(storageKey) || "{}");
       const counts = {};
