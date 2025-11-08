@@ -1,5 +1,6 @@
-// Tệp đã sửa lỗi: App.jsx
-// Đã thêm logic để không fetch-count nếu là vai trò 'Bộ phận' hoặc 'Nhà Ăn'
+// Tệp: App.jsx
+// SỬA LỖI: Thêm try...catch vào trong onAuthStateChanged
+// để xử lý lỗi promise (Uncaught in promise)
 import React, { useState, useEffect } from "react";
 import Login from "./components/Login";
 import GembaCheckList from "./components/gembachecklist";
@@ -85,28 +86,42 @@ export default function App() {
   const { t } = useI18n();
 
   useEffect(() => {
+    // =================================================================
+    // === BẮT ĐẦU SỬA LỖI (Uncaught in promise)                      ===
+    // =================================================================
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        const ref = doc(db, "users", firebaseUser.uid);
-        const snap = await getDoc(ref);
-        if (snap.exists()) {
-          const data = snap.data();
-          const userData = { uid: firebaseUser.uid, email: firebaseUser.email, ...data };
-          setUser(userData);
+      try { // Thêm try...
+        if (firebaseUser) {
+          const ref = doc(db, "users", firebaseUser.uid);
+          const snap = await getDoc(ref); // Lệnh await này có thể gây lỗi
+          if (snap.exists()) {
+            const data = snap.data();
+            const userData = { uid: firebaseUser.uid, email: firebaseUser.email, ...data };
+            setUser(userData);
 
-          const roleN = normalizeRole(userData.role);
-          const isDept = deptRolesNormalized.has(roleN);
-          const isCanteen = roleN === CANTEEN_NORMALIZED;
-          
-          setTab(isDept || isCanteen ? 7 : 0);
-          
+            const roleN = normalizeRole(userData.role);
+            const isDept = deptRolesNormalized.has(roleN);
+            const isCanteen = roleN === CANTEEN_NORMALIZED;
+            
+            setTab(isDept || isCanteen ? 7 : 0);
+            
+          } else {
+            // Nếu không tìm thấy thông tin user trong 'users' (ví dụ: bị xóa)
+            setUser(null); 
+          }
         } else {
           setUser(null);
         }
-      } else {
-        setUser(null);
+      } catch (error) { // Thêm ...catch
+        // Xử lý bất kỳ lỗi nào xảy ra khi getDoc
+        console.error("Lỗi khi kiểm tra trạng thái đăng nhập:", error);
+        setUser(null); // Đảm bảo logout nếu có lỗi
+      } finally { // Thêm finally
+        setLoading(false);
       }
-      setLoading(false);
+      // =================================================================
+      // === KẾT THÚC SỬA LỖI                                          ===
+      // =================================================================
     });
     return () => unsubscribe();
   }, []);
@@ -114,24 +129,15 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
 
-    // =================================================================
-    // === BẮT ĐẦU SỬA LỖI 403 (Permission Denied) CHO VAI TRÒ BỘ PHẬN ===
-    // =================================================================
     const roleN = normalizeRole(user.role);
     const isDept = deptRolesNormalized.has(roleN);
     const isCanteen = roleN === CANTEEN_NORMALIZED;
 
-    // Nếu là vai trò 'Bộ phận' hoặc 'Nhà ăn', họ không cần xem
-    // thông báo Gemba/TuGemba (vì menu bị ẩn).
-    // Bỏ qua việc fetch counts để tránh lỗi 403 và tối ưu.
     if (isDept || isCanteen) {
       setGembaNotifCounts({});
       setTuGembaNotifCounts({});
-      return; // Dừng lại, không chạy fetch counts
+      return; 
     }
-    // =================================================================
-    // === KẾT THÚC SỬA LỖI 403                                       ===
-    // =================================================================
 
     const fetchCountsForTab = async (collectionName, storageKey, setCountFunction) => {
       const lastSeenTimestamps = JSON.parse(localStorage.getItem(storageKey) || "{}");
@@ -161,6 +167,8 @@ export default function App() {
   const handleLogout = async () => {
     try {
       await signOut(auth);
+      // setUser(null) và setLoading(false) sẽ được xử lý tự động
+      // bởi onAuthStateChanged
     } catch (e) {
       console.error("Lỗi đăng xuất:", e);
     }
