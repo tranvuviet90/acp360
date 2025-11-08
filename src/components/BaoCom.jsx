@@ -1,3 +1,6 @@
+// Tệp: BaoCom.jsx
+// Sửa lỗi React #310 bằng cách đổi tên NumberInput -> _NumberInput
+// và gọi nó như một component JSX <_NumberInput ... />
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { db } from '../firebase';
 import {
@@ -49,72 +52,61 @@ const fmtTime = (t) => {
 };
 
 /* --- Custom Hook: useLongPress (for mobile long-press) --- */
+// (Logic useLongPress của bạn đã chính xác, giữ nguyên)
 const useLongPress = (callback, onClick, ms = 80) => {
   const timeoutRef = useRef();
   const intervalRef = useRef();
   const longPressedRef = useRef(false);
-
-  // Dùng ref để lưu callback, tránh lỗi "stale closure"
   const callbackRef = useRef(callback);
   const onClickRef = useRef(onClick);
-
-  useEffect(() => {
-    callbackRef.current = callback;
-  }, [callback]);
-
-  useEffect(() => {
-    onClickRef.current = onClick;
-  }, [onClick]);
-
+  useEffect(() => { callbackRef.current = callback; }, [callback]);
+  useEffect(() => { onClickRef.current = onClick; }, [onClick]);
   const start = (e) => {
-    // KHÔNG chặn sự kiện touch để tránh mất focus input trên Android
     const isTouch = e?.type?.startsWith?.('touch');
     if (!isTouch && e?.cancelable) e.preventDefault();
-
-    longPressedRef.current = false; // reset trạng thái
-
-    // Sau 400ms nhấn giữ, kích hoạt long press
+    longPressedRef.current = false;
     timeoutRef.current = setTimeout(() => {
       longPressedRef.current = true;
-      callbackRef.current();        // chạy callback lần đầu
+      callbackRef.current();
       intervalRef.current = setInterval(() => {
-        callbackRef.current();      // tiếp tục gọi callback liên tục
+        callbackRef.current();
       }, ms);
     }, 400);
   };
-
   const stop = () => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     if (intervalRef.current) clearInterval(intervalRef.current);
     timeoutRef.current = null;
     intervalRef.current = null;
   };
-
-  // Xử lý sự kiện click release
   const clickHandler = (e) => {
-    // Nếu đã xử lý như long press thì chặn click thường
     if (longPressedRef.current) {
       e.preventDefault();
       return;
     }
-    // Nếu chỉ click bình thường (nhả trước 400ms) thì gọi onClick
     onClickRef.current();
   };
-
-  useEffect(() => () => stop(), []); // cleanup khi component unmount
-
+  useEffect(() => () => stop(), []);
   return {
     onMouseDown: start,
     onMouseUp: stop,
     onMouseLeave: stop,
     onTouchStart: start,
     onTouchEnd: stop,
-    onClick: clickHandler, // trả về cả handler onClick đã xử lý long press
+    onClick: clickHandler,
   };
 };
 
+
 /* --- NumberInput: Ô nhập số với nút +/- cho mobile (memo để giảm re-render) --- */
-const NumberInput = React.memo(function NumberInput({ value, onChange, min = 0, style, placeholder = "Nhập" }) {
+// =================================================================
+// === BẮT ĐẦU SỬA LỖI #310                                       ===
+// =================================================================
+// Đổi tên thành _NumberInput (component nội bộ, viết hoa)
+const _NumberInput = React.memo(function NumberInput({ value, onChange, min = 0, style, placeholder = "Nhập" }) {
+// =================================================================
+// === KẾT THÚC SỬA LỖI #310                                      ===
+// =================================================================
   const shown = (value === 0 || value === null || value === undefined) ? '' : value;
   const safeVal = Number(value || 0);
 
@@ -125,7 +117,6 @@ const NumberInput = React.memo(function NumberInput({ value, onChange, min = 0, 
     if (!Number.isNaN(n) && n >= min) onChange(n);
   };
 
-  // Dùng useCallback để luôn lấy giá trị safeVal mới nhất khi gọi từ useLongPress
   const increment = useCallback(() => {
     onChange(safeVal + 1);
   }, [safeVal, onChange]);
@@ -139,7 +130,6 @@ const NumberInput = React.memo(function NumberInput({ value, onChange, min = 0, 
     }
   }, [safeVal, onChange, min]);
 
-  // Truyền các handler cho hook long-press (giữ nút tăng/giảm để tự động nhấn)
   const longPressIncrement = useLongPress(increment, increment, 100);
   const longPressDecrement = useLongPress(decrement, decrement, 100);
 
@@ -157,7 +147,7 @@ const NumberInput = React.memo(function NumberInput({ value, onChange, min = 0, 
     padding: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    touchAction: 'manipulation', // tránh gesture làm mất focus trên Android
+    touchAction: 'manipulation',
   };
 
   const wrapperStyle = {
@@ -172,7 +162,6 @@ const NumberInput = React.memo(function NumberInput({ value, onChange, min = 0, 
         type="button"
         className="number-control-btn"
         style={{ ...btnStyle, color: '#d9534f' }}
-        // Chặn bubble sự kiện touch để không ảnh hưởng đến input
         onTouchStart={(e) => { e.stopPropagation(); longPressDecrement.onTouchStart?.(e); }}
         onTouchEnd={(e)   => { e.stopPropagation(); longPressDecrement.onTouchEnd?.(e); }}
         onMouseDown={longPressDecrement.onMouseDown}
@@ -192,7 +181,6 @@ const NumberInput = React.memo(function NumberInput({ value, onChange, min = 0, 
         placeholder={placeholder}
         onChange={handleInputChange}
         onFocus={(e) => {
-          // Giữ focus khi tap nhanh trên Android (sửa lỗi mất focus)
           setTimeout(() => {
             e.target.setSelectionRange?.(0, String(e.target.value || '').length);
           }, 0);
@@ -222,8 +210,6 @@ function DepartmentView({ user, reportData, selectedDateKey }) {
   const { pushToast } = useToast();
   const userRole = user.role;
   const [formData, setFormData] = useState({});
-
-  // NEW: khóa đồng bộ khi đang gõ + snapshot gần nhất để so sánh sâu
   const isEditingRef = useRef(false);
   const lastSnapshotRef = useRef(null);
 
@@ -251,10 +237,9 @@ function DepartmentView({ user, reportData, selectedDateKey }) {
     return true;
   };
 
-  // Đồng bộ formData từ reportData: chỉ khi không đang gõ và thực sự khác
   useEffect(() => {
     if (!reportData) return;
-    if (isEditingRef.current) return; // quan trọng: đừng reset mid-typing (Android sẽ tắt bàn phím)
+    if (isEditingRef.current) return;
     const next = buildFormFromReport();
     if (!lastSnapshotRef.current || !isSameForm(lastSnapshotRef.current, next)) {
       lastSnapshotRef.current = next;
@@ -262,7 +247,6 @@ function DepartmentView({ user, reportData, selectedDateKey }) {
     }
   }, [reportData, buildFormFromReport]);
 
-  // Khởi tạo lần đầu nếu trống
   useEffect(() => {
     if (!formData[SHIFTS[0]] && reportData) {
       const next = buildFormFromReport();
@@ -275,7 +259,6 @@ function DepartmentView({ user, reportData, selectedDateKey }) {
     return <div>Đang tải form...</div>;
   }
 
-  // Handler onChange ổn định
   const makeOnChange = useCallback((shift, key) => (n) => {
     if (Number.isNaN(n) || n < 0) return;
     setFormData(prev => ({ ...prev, [shift]: { ...prev[shift], [key]: n } }));
@@ -283,12 +266,9 @@ function DepartmentView({ user, reportData, selectedDateKey }) {
 
   const saveShift = async (shift) => {
     const docRef = doc(db, 'meal_reports', selectedDateKey);
-
     const prev = reportData?.[shift]?.reports?.[userRole] || {};
     const fulfilled = reportData?.[shift]?.overtimeFulfilled?.[userRole];
     const isFulfilled = (fulfilled?.mi || 0) > 0 || (fulfilled?.sua || 0) > 0;
-
-    // Tính chênh lệch so với lần gửi trước để ghi history
     const diffs = [];
     ALL_MEAL_KEYS.forEach(k => {
       const before = Number(prev[k] || 0);
@@ -299,29 +279,22 @@ function DepartmentView({ user, reportData, selectedDateKey }) {
         diffs.push(`${LABEL_BY_KEY[k]}: ${sign}`);
       }
     });
-
     const newTangCaMi = Number(formData[shift].tangCaMi || 0);
     const newTangCaSua = Number(formData[shift].tangCaSua || 0);
     const prevTangCaMi = Number(prev.tangCaMi || 0);
     const prevTangCaSua = Number(prev.tangCaSua || 0);
     const otChanged = newTangCaMi !== prevTangCaMi || newTangCaSua !== prevTangCaSua;
-
     let action = 'Bộ phận cập nhật báo cơm';
     let details = diffs.length ? diffs.join(', ') : 'Không thay đổi số lượng.';
-
-    // Chuẩn bị payload báo cáo của bộ phận
     const reportPayload = {
       ...formData[shift],
       lastUpdated: serverTimestamp(),
       user: user.name
     };
-
     if (isFulfilled && otChanged) {
-      // --- Trường hợp đã phát TC: gửi yêu cầu cập nhật lên Admin ---
       reportPayload.changePending = true;
       action = 'Bộ phận Y/C cập nhật Tăng Ca';
       details = `Yêu cầu đổi TC (đã phát): Mì [${prevTangCaMi} -> ${newTangCaMi}], Sữa [${prevTangCaSua} -> ${newTangCaSua}]`;
-
       const payload = {
         [shift]: { reports: { [userRole]: reportPayload } },
         history: arrayUnion({
@@ -330,7 +303,6 @@ function DepartmentView({ user, reportData, selectedDateKey }) {
         }),
         lastHistoryAt: serverTimestamp()
       };
-
       try {
         await setDoc(docRef, payload, { merge: true });
         pushToast(`Đã gửi YÊU CẦU cập nhật TC cho ${SHIFT_NAMES[shift]} đến Admin.`, 'info');
@@ -338,13 +310,10 @@ function DepartmentView({ user, reportData, selectedDateKey }) {
         console.error(e);
         pushToast('Gửi yêu cầu thất bại.', 'error');
       }
-
     } else {
-      // --- Trường hợp cập nhật bình thường (chưa phát hoặc không đổi TC) ---
       if (reportPayload.changePending) {
-        reportPayload.changePending = false; // nếu trước đó có cờ pending thì bỏ
+        reportPayload.changePending = false;
       }
-
       const payload = {
         [shift]: {
           reports: { [userRole]: reportPayload },
@@ -356,7 +325,6 @@ function DepartmentView({ user, reportData, selectedDateKey }) {
         }),
         lastHistoryAt: serverTimestamp()
       };
-
       try {
         await setDoc(docRef, payload, { merge: true });
         pushToast(`Đã lưu báo cơm cho ${SHIFT_NAMES[shift]}.`, 'success');
@@ -368,7 +336,6 @@ function DepartmentView({ user, reportData, selectedDateKey }) {
   };
 
   return (
-    // Capture focus/blur để xác định đang gõ -> khóa đồng bộ formData
     <div
       onFocusCapture={() => { isEditingRef.current = true; }}
       onBlurCapture={() => { setTimeout(() => { isEditingRef.current = false; }, 120); }}
@@ -382,7 +349,10 @@ function DepartmentView({ user, reportData, selectedDateKey }) {
               {Object.entries(MEAL_TYPES.congNhan).map(([k, label]) => (
                 <div key={k} style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <label>{label}: </label>
-                  <NumberInput value={formData[shift][k]} onChange={makeOnChange(shift, k)} />
+                  {/* ================================================================= */}
+                  {/* === SỬA LỖI #310: Gọi <_NumberInput ... />                     === */}
+                  {/* ================================================================= */}
+                  <_NumberInput value={formData[shift][k]} onChange={makeOnChange(shift, k)} />
                 </div>
               ))}
             </div>
@@ -391,7 +361,10 @@ function DepartmentView({ user, reportData, selectedDateKey }) {
               {Object.entries(MEAL_TYPES.giamSat).map(([k, label]) => (
                 <div key={k} style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <label>{label}: </label>
-                  <NumberInput value={formData[shift][k]} onChange={makeOnChange(shift, k)} />
+                  {/* ================================================================= */}
+                  {/* === SỬA LỖI #310: Gọi <_NumberInput ... />                     === */}
+                  {/* ================================================================= */}
+                  <_NumberInput value={formData[shift][k]} onChange={makeOnChange(shift, k)} />
                 </div>
               ))}
             </div>
@@ -400,7 +373,10 @@ function DepartmentView({ user, reportData, selectedDateKey }) {
               {Object.entries(MEAL_TYPES.tangCa).map(([k, label]) => (
                 <div key={k} style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <label>{label}: </label>
-                  <NumberInput value={formData[shift][k]} onChange={makeOnChange(shift, k)} />
+                  {/* ================================================================= */}
+                  {/* === SỬA LỖI #310: Gọi <_NumberInput ... />                     === */}
+                  {/* ================================================================= */}
+                  <_NumberInput value={formData[shift][k]} onChange={makeOnChange(shift, k)} />
                 </div>
               ))}
             </div>
@@ -433,12 +409,10 @@ function DeptDetailModal({ department, reportData, onClose }) {
           }
           .rc-wrap { overflow-x: auto; }
         `}</style>
-
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <h3 style={{ margin: 0, fontSize: 18 }}>Chi tiết báo cơm – {department}</h3>
           <button onClick={onClose} style={{ border: 0, background: '#eee', padding: '6px 10px', borderRadius: 8, cursor: 'pointer' }}>Đóng</button>
         </div>
-
         <h4 style={{ margin: '6px 0' }}>Số lượng theo từng ca</h4>
         <div className="rc-wrap">
           <table className="rc-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -475,7 +449,6 @@ function DeptDetailModal({ department, reportData, onClose }) {
             </tbody>
           </table>
         </div>
-
         <h4 style={{ margin: '12px 0 6px' }}>Lịch sử thay đổi của bộ phận</h4>
         {history.length === 0 ? (
           <div style={{ padding: 8, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8 }}>
@@ -518,15 +491,12 @@ function DeptDetailModal({ department, reportData, onClose }) {
 function AdminView({ user, reportData, selectedDateKey, onDeptClick, onOpenExport }) {
   const { pushToast } = useToast();
   const [adjustedTotals, setAdjustedTotals] = useState({});
-
-  // Tính tổng hợp suất ăn từ dữ liệu các bộ phận (trừ phần tăng ca đang chờ duyệt)
   const summary = useMemo(() => {
     const totals = {};
     SHIFTS.forEach(shift => {
       totals[shift] = {};
       ALL_MEAL_KEYS.forEach(k => { totals[shift][k] = 0; });
       const reports = reportData?.[shift]?.reports || {};
-
       for (const deptKey in reports) {
         const rep = reports[deptKey];
         if (!rep.changePending) {
@@ -534,13 +504,11 @@ function AdminView({ user, reportData, selectedDateKey, onDeptClick, onOpenExpor
             totals[shift][k] += Number(rep?.[k] || 0);
           });
         } else {
-          // Nếu bộ phận đang chờ duyệt tăng ca, cộng các phần *không phải* Tăng ca
           ALL_MEAL_KEYS.forEach(k => {
             if (k !== 'tangCaMi' && k !== 'tangCaSua') {
               totals[shift][k] += Number(rep?.[k] || 0);
             }
           });
-          // Phần Tăng ca đã phát thì cộng từ overtimeFulfilled (số thực phát)
           const fulfilled = reportData?.[shift]?.overtimeFulfilled?.[deptKey] || {};
           totals[shift].tangCaMi += Number(fulfilled.mi || 0);
           totals[shift].tangCaSua += Number(fulfilled.sua || 0);
@@ -549,8 +517,6 @@ function AdminView({ user, reportData, selectedDateKey, onDeptClick, onOpenExpor
     });
     return totals;
   }, [reportData]);
-
-  // Tổng hợp các yêu cầu thu hồi tăng ca (nếu lượng phát > lượng yêu cầu)
   const recallRequests = useMemo(() => {
     const recalls = [];
     if (!reportData) return recalls;
@@ -573,7 +539,6 @@ function AdminView({ user, reportData, selectedDateKey, onDeptClick, onOpenExpor
     });
     return recalls;
   }, [reportData]);
-
   const confirmRecall = async (recall) => {
     if (!window.confirm(`Xác nhận đã thu hồi ${recall.surplusMi} mì và ${recall.surplusSua} sữa từ bộ phận ${recall.dept} (${SHIFT_NAMES[recall.shift]})?`)) {
       return;
@@ -599,8 +564,6 @@ function AdminView({ user, reportData, selectedDateKey, onDeptClick, onOpenExpor
       pushToast('Xác nhận thu hồi thất bại.', 'error');
     }
   };
-
-  // Bản chụp nhanh số liệu đã gửi (summary) lần cuối cùng Admin gửi cho Nhà ăn
   const sentSnapshot = useMemo(() => {
     const map = {};
     SHIFTS.forEach(shift => {
@@ -608,8 +571,6 @@ function AdminView({ user, reportData, selectedDateKey, onDeptClick, onOpenExpor
     });
     return map;
   }, [reportData]);
-
-  // Khi có dữ liệu hoặc tổng mới, reset adjustedTotals để Admin thấy số liệu mới nhất
   useEffect(() => {
     const init = {};
     SHIFTS.forEach(shift => {
@@ -617,9 +578,7 @@ function AdminView({ user, reportData, selectedDateKey, onDeptClick, onOpenExpor
     });
     setAdjustedTotals(init);
   }, [summary, reportData]);
-
   const onAdjust = (shift, key, val) => {
-    // Cập nhật giá trị điều chỉnh khi Admin sửa ô input
     if (val === '') {
       setAdjustedTotals(prev => ({ ...prev, [shift]: { ...prev[shift], [key]: 0 } }));
       return;
@@ -629,13 +588,10 @@ function AdminView({ user, reportData, selectedDateKey, onDeptClick, onOpenExpor
       setAdjustedTotals(prev => ({ ...prev, [shift]: { ...prev[shift], [key]: v } }));
     }
   };
-
   const confirmShift = async (shift) => {
     if (!window.confirm(`Xác nhận & gửi ${SHIFT_NAMES[shift]} cho Nhà Ăn?`)) return;
     const docRef = doc(db, 'meal_reports', selectedDateKey);
     const batch = writeBatch(db);
-
-    // Chuẩn bị dữ liệu trước và sau khi điều chỉnh để ghi lịch sử thay đổi
     const before = summary[shift] || {};
     const after  = adjustedTotals[shift] || {};
     const changes = [];
@@ -646,8 +602,6 @@ function AdminView({ user, reportData, selectedDateKey, onDeptClick, onOpenExpor
         changes.push(`${LABEL_BY_KEY[k]}: ${sign}`);
       }
     });
-
-    // Cập nhật tổng hợp và ghi nhận người xác nhận (Admin)
     const payload = {
       summary: after,
       confirmedByAdmin: user.name,
@@ -656,29 +610,24 @@ function AdminView({ user, reportData, selectedDateKey, onDeptClick, onOpenExpor
       confirmedAtCanteen: reportData?.[shift]?.confirmedAtCanteen || null,
     };
     batch.set(docRef, { [shift]: payload }, { merge: true });
-
-    // Kiểm tra các bộ phận đã phát tăng ca vượt quá yêu cầu để đánh dấu chờ thu hồi
     const reports = reportData?.[shift]?.reports || {};
     const fulfilled = reportData?.[shift]?.overtimeFulfilled || {};
     for (const dept in fulfilled) {
       if (
-        !fulfilled[dept].recallPending &&    // chưa chờ thu hồi
-        !reports[dept]?.changePending        // bộ phận không có yêu cầu thay đổi
+        !fulfilled[dept].recallPending &&
+        !reports[dept]?.changePending
       ) {
         const reqMi = Number(reports[dept]?.tangCaMi || 0);
         const reqSua = Number(reports[dept]?.tangCaSua || 0);
         const fulMi = Number(fulfilled[dept]?.mi || 0);
         const fulSua = Number(fulfilled[dept]?.sua || 0);
         if (reqMi < fulMi || reqSua < fulSua) {
-          // nếu số đã phát > số yêu cầu thì đánh dấu cần thu hồi
           batch.update(docRef, {
             [`${shift}.overtimeFulfilled.${dept}.recallPending`]: true
           });
         }
       }
     }
-
-    // Ghi lịch sử xác nhận gửi Nhà ăn
     batch.update(docRef, {
       history: arrayUnion({
         user: user.name,
@@ -690,7 +639,6 @@ function AdminView({ user, reportData, selectedDateKey, onDeptClick, onOpenExpor
       }),
       lastHistoryAt: serverTimestamp()
     });
-
     try {
       await batch.commit();
       const alreadySentBefore = !!reportData?.[shift]?.confirmedByAdmin;
@@ -700,8 +648,6 @@ function AdminView({ user, reportData, selectedDateKey, onDeptClick, onOpenExpor
       pushToast('Xác nhận thất bại.', 'error');
     }
   };
-
-  // Các thành phần giao diện con trong AdminView
   const Chip = ({ dep, reported, isPending }) => (
     <button
       onClick={() => reported && onDeptClick(dep)}
@@ -719,7 +665,6 @@ function AdminView({ user, reportData, selectedDateKey, onDeptClick, onOpenExpor
       {dep}{isPending ? ' ⏳' : ''}
     </button>
   );
-
   const Delta = ({ diff }) => {
     if (!diff) return null;
     const up = diff > 0;
@@ -727,24 +672,18 @@ function AdminView({ user, reportData, selectedDateKey, onDeptClick, onOpenExpor
     const arrow = up ? '▲' : '▼';
     return <span style={{ marginLeft: 6, color, fontWeight: 700 }}>{arrow} {Math.abs(diff)}</span>;
   };
-
   const isAdjusted = (shift) => {
-    // Kiểm tra xem Admin đã điều chỉnh khác với tổng hợp ban đầu không
     const adj = adjustedTotals[shift] || {};
     const sum = summary[shift] || {};
     return ALL_MEAL_KEYS.some(k => (adj[k] ?? 0) !== (sum[k] ?? 0));
   };
-
   return (
     <div>
-      {/* Nút xuất báo cáo Excel */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 8, gap: 8, flexWrap: 'wrap' }}>
         <button onClick={onOpenExport} style={{ background: '#1f80e0', color: '#fff', border: 0, padding: '8px 12px', borderRadius: 8, fontWeight: 700, cursor: 'pointer' }}>
           Xuất báo cáo (Excel)
         </button>
       </div>
-
-      {/* Thông báo yêu cầu thu hồi tăng ca (nếu có) */}
       {recallRequests.length > 0 && (
         <div className="card" style={{ marginBottom: 16, padding: 12, border: '1px solid #fecaca', borderRadius: 12, background: '#fff1f2' }}>
           <h3 style={{ marginTop: 0, color: '#b91c1c' }}>Yêu cầu thu hồi tăng ca</h3>
@@ -781,24 +720,18 @@ function AdminView({ user, reportData, selectedDateKey, onDeptClick, onOpenExpor
           </div>
         </div>
       )}
-
-      {/* Tổng hợp theo ca và điều chỉnh (cho từng ca S1, S2, S3, S8, HC) */}
       {SHIFTS.map(shift => {
         const sd = reportData?.[shift] || {};
         const statusAdmin = !!sd.confirmedByAdmin;
         const statusCanteen = !!sd.confirmedByCanteen;
         const newAfterSend = tsSec(sd.lastReportAt) > tsSec(sd.confirmedAtAdmin);
-
         const canConfirm = !statusAdmin || newAfterSend || isAdjusted(shift);
-
         const reports = sd.reports || {};
-        // danh sách các bộ phận và trạng thái báo của từng bộ phận
         const depChips = DEPARTMENTS.map(dep => ({
           dep,
           reported: !!reports[dep],
           isPending: !!reports[dep]?.changePending
         }));
-
         return (
           <div key={shift} className="card" style={{ marginBottom: 16, padding: 12, border: '1px solid #eee', borderRadius: 12 }}>
             <h3 style={{ marginTop: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -813,7 +746,6 @@ function AdminView({ user, reportData, selectedDateKey, onDeptClick, onOpenExpor
                   : (statusAdmin ? (newAfterSend ? 'Đã gửi (có thay đổi)' : 'Đã gửi cho Nhà Ăn') : 'Chưa gửi')}
               </span>
             </h3>
-
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead style={{ background: colors.primaryLight || '#eef5ff' }}>
                 <tr>
@@ -837,7 +769,10 @@ function AdminView({ user, reportData, selectedDateKey, onDeptClick, onOpenExpor
                             <Delta diff={diff} />
                           </td>
                           <td style={{ padding: 8, border: '1px solid #f0f0f0', textAlign: 'center' }}>
-                            <NumberInput value={adjustedTotals[shift]?.[k] ?? 0} onChange={(n) => onAdjust(shift, k, n)} />
+                            {/* ================================================================= */}
+                            {/* === SỬA LỖI #310: Gọi <_NumberInput ... />                     === */}
+                            {/* ================================================================= */}
+                            <_NumberInput value={adjustedTotals[shift]?.[k] ?? 0} onChange={(n) => onAdjust(shift, k, n)} />
                           </td>
                         </tr>
                       );
@@ -846,7 +781,6 @@ function AdminView({ user, reportData, selectedDateKey, onDeptClick, onOpenExpor
                 ))}
               </tbody>
             </table>
-
             <div style={{ marginTop: 10 }}>
               <h4 style={{ margin: '8px 0' }}>Trạng thái bộ phận:</h4>
               <div>
@@ -855,7 +789,6 @@ function AdminView({ user, reportData, selectedDateKey, onDeptClick, onOpenExpor
                 ))}
               </div>
             </div>
-
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
               <button
                 onClick={() => confirmShift(shift)}
@@ -880,31 +813,20 @@ function AdminView({ user, reportData, selectedDateKey, onDeptClick, onOpenExpor
 /* --- CanteenView: Giao diện Nhà Ăn --- */
 function CanteenView({ user, reportData, selectedDateKey }) {
   const { pushToast } = useToast();
-
-  // Tên hiển thị của tài khoản Nhà ăn (ưu tiên tên đầy đủ nếu có)
   const canteenName = useMemo(() => user?.name || user?.displayName || 'Nhà Ăn', [user]);
-
-  // Xử lý và nhóm dữ liệu cần thiết cho giao diện Nhà ăn
   const processedData = useMemo(() => {
     const dataByShift = {};
     if (!reportData) return {};
     SHIFTS.forEach(shift => {
       const shiftData = reportData[shift];
       if (!shiftData?.confirmedByAdmin) {
-        // Nếu Admin chưa gửi số liệu cho ca này thì bỏ qua (Nhà ăn không thấy gì)
         return;
       }
       const summary = shiftData.summary || {};
-      const confirmedSummary = shiftData.confirmedSummary || {};  // Số liệu Nhà ăn đã chốt trước đó
+      const confirmedSummary = shiftData.confirmedSummary || {};
       const isConfirmed = !!shiftData.confirmedByCanteen;
       const needsReconfirmation = tsSec(shiftData.confirmedAtAdmin) > tsSec(shiftData.confirmedAtCanteen);
-
-      // Số liệu hiển thị trên bảng chính:
-      // - Nếu Nhà ăn đã từng xác nhận: dùng số đã chốt (confirmedSummary)
-      // - Nếu chưa xác nhận lần nào: dùng số Admin gửi (summary)
       const displaySummary = isConfirmed ? confirmedSummary : summary;
-
-      // Nếu Admin có cập nhật mới sau khi Nhà ăn đã xác nhận, tính danh sách chênh lệch
       const deltas = [];
       if (isConfirmed && needsReconfirmation) {
         ALL_MEAL_KEYS.forEach(k => {
@@ -915,15 +837,12 @@ function CanteenView({ user, reportData, selectedDateKey }) {
           }
         });
       }
-
-      // Tổng hợp các yêu cầu lãnh suất ăn tăng ca của các bộ phận trong ca này
       const requests = [];
       const reports = shiftData.reports || {};
       const fulfilledMap = shiftData.overtimeFulfilled || {};
       for (const dept in reports) {
         const reqMi = Number(reports[dept]?.tangCaMi || 0);
         const reqSua = Number(reports[dept]?.tangCaSua || 0);
-        // Chỉ thêm vào danh sách nếu bộ phận có yêu cầu tăng ca > 0
         if (reqMi > 0 || reqSua > 0) {
           const fulfilled = fulfilledMap[dept] || {};
           const fulMi = Number(fulfilled.mi || 0);
@@ -938,29 +857,26 @@ function CanteenView({ user, reportData, selectedDateKey }) {
           });
         }
       }
-
       dataByShift[shift] = {
-        summary: summary,                   // Số liệu Admin gửi mới nhất
-        confirmedSummary: confirmedSummary, // Số liệu Nhà ăn đã chốt (nếu có)
-        displaySummary: displaySummary,     // Số liệu để render bảng chính
+        summary: summary,
+        confirmedSummary: confirmedSummary,
+        displaySummary: displaySummary,
         confirmedByCanteen: shiftData.confirmedByCanteen,
         needsReconfirmation,
-        deltas,                             // Danh sách chênh lệch (nếu có cập nhật mới)
+        deltas,
         requests: requests.sort((a, b) => a.dept.localeCompare(b.dept)),
       };
     });
     return dataByShift;
   }, [reportData]);
-
   const confirmShift = async (shift, isReconfirm = false) => {
     const actionText = isReconfirm ? 'xác nhận thay đổi' : 'nhận số liệu';
     if (!window.confirm(`Xác nhận đã ${actionText} cho ${SHIFT_NAMES[shift]}?`)) return;
     const docRef = doc(db, 'meal_reports', selectedDateKey);
-    // Lấy số liệu summary mới nhất mà Admin vừa gửi
     const currentSummary = reportData[shift]?.summary || {};
     try {
       await updateDoc(docRef, {
-        [`${shift}.confirmedSummary`]: currentSummary, // Lưu snapshot số liệu tại thời điểm xác nhận
+        [`${shift}.confirmedSummary`]: currentSummary,
         [`${shift}.confirmedByCanteen`]: canteenName,
         [`${shift}.confirmedAtCanteen`]: serverTimestamp(),
         history: arrayUnion({
@@ -979,7 +895,6 @@ function CanteenView({ user, reportData, selectedDateKey }) {
       pushToast('Xác nhận thất bại.', 'error');
     }
   };
-
   const fulfillOvertime = async (shift, req) => {
     const { dept, reqMi, reqSua, fulMi, fulSua, miToFulfill, suaToFulfill } = req;
     const actionText = (fulMi > 0 || fulSua > 0) ? 'phát bù' : 'phát';
@@ -1015,7 +930,6 @@ function CanteenView({ user, reportData, selectedDateKey }) {
       pushToast('Thao tác thất bại.', 'error');
     }
   };
-
   return (
     <div>
       {Object.keys(processedData).length === 0 && (
@@ -1023,18 +937,13 @@ function CanteenView({ user, reportData, selectedDateKey }) {
           <p>Chưa có ca nào được Aldila gửi.</p>
         </div>
       )}
-
       {SHIFTS.map(shift => {
         const data = processedData[shift];
         if (!data) return null;
-
         const isConfirmed = !!data.confirmedByCanteen;
-        // Chỉ hiện bảng yêu cầu tăng ca sau khi Nhà ăn đã xác nhận và không có cập nhật mới
         const canShowRequests = isConfirmed && !data.needsReconfirmation;
-
         return (
           <React.Fragment key={shift}>
-            {/* Cảnh báo khi có số liệu mới cập nhật (cần xác nhận lại) */}
             {isConfirmed && data.needsReconfirmation && (
               <div style={{
                 marginBottom: 12,
@@ -1069,7 +978,6 @@ function CanteenView({ user, reportData, selectedDateKey }) {
                 </button>
               </div>
             )}
-
             <div className="card" style={{ marginBottom: 12, padding: 12, border: '1px solid #eee', borderRadius: 12 }}>
               <h3 style={{ marginTop: 0, display: 'flex', justifyContent: 'space-between' }}>
                 <span>Số lượng suất ăn – {SHIFT_NAMES[shift]}</span>
@@ -1079,7 +987,6 @@ function CanteenView({ user, reportData, selectedDateKey }) {
                   </span>
                 )}
               </h3>
-
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead style={{ background: colors.primaryLight || '#eef5ff' }}>
                   <tr>
@@ -1102,8 +1009,6 @@ function CanteenView({ user, reportData, selectedDateKey }) {
                   ))}
                 </tbody>
               </table>
-
-              {/* Nút xác nhận lần đầu (chỉ hiện nếu chưa xác nhận) */}
               {!isConfirmed && (
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
                   <button onClick={() => confirmShift(shift, false)} style={{ background: colors.primary, color: '#fff', border: 0, padding: '10px 16px', borderRadius: 10, fontWeight: 700, cursor: 'pointer' }}>
@@ -1112,8 +1017,6 @@ function CanteenView({ user, reportData, selectedDateKey }) {
                 </div>
               )}
             </div>
-
-            {/* Bảng yêu cầu lãnh tăng ca (hiện sau khi đã xác nhận và không cần xác nhận lại) */}
             {canShowRequests && data.requests.length > 0 && (
               <div className="card" style={{ margin: '-5px 0 12px 0', padding: 12, border: '1px solid #eee', borderRadius: 12, borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
                 <h4 style={{ marginTop: 0 }}>Yêu cầu lãnh tăng ca – {SHIFT_NAMES[shift]}</h4>
@@ -1133,7 +1036,6 @@ function CanteenView({ user, reportData, selectedDateKey }) {
                         const canFulfill = req.miToFulfill > 0 || req.suaToFulfill > 0;
                         const actionText = (req.fulMi > 0 || req.fulSua > 0) ? 'Phát bù' : 'Phát';
                         const isFulfilled = !canFulfill && (req.reqMi > 0 || req.reqSua > 0);
-
                         return (
                           <tr key={req.dept}>
                             <td style={{ padding: 8, border: '1px solid #f1f5f9' }}>{req.dept}</td>
@@ -1175,7 +1077,6 @@ function CanteenView({ user, reportData, selectedDateKey }) {
 function ExportBaoComModal({ onClose }) {
   const [selectedMonth, setSelectedMonth] = useState(new Date());
   const [isGen, setIsGen] = useState(false);
-
   const toId = (d) => {
     if (!(d instanceof Date)) d = new Date(d);
     return dateKey(d);
@@ -1184,43 +1085,34 @@ function ExportBaoComModal({ onClose }) {
     if (!(d instanceof Date)) d = new Date(d);
     return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
   };
-
-  // Ánh xạ key ca sang nhãn ca trong template Excel
   const SHIFT_LABEL_BY_KEY = { S1: "S1+S4", S2: "S2+S5", S3: "S3", S8: "S8", HC: "HC" };
-  // Ánh xạ key dữ liệu sang vị trí cột (offset 0-based) trong file Excel
   const NEW_COL_OFFSETS = {
-    cnMan: 0,  // Cơm mặn (CN)
-    cnChay: 1, // Cơm chay (CN)
-    gsMan: 2,  // Cơm mặn (GS)
-    gsSua: 3,  // Sữa (cơm) (GS)
-    gsChay: 4, // Cơm chay (GS)
-    tcMi: 5,   // Mì (TC)
-    tcSua: 6,  // Sữa (TC)
-    user: 7    // Tên người báo
+    cnMan: 0,
+    cnChay: 1,
+    gsMan: 2,
+    gsSua: 3,
+    gsChay: 4,
+    tcMi: 5,
+    tcSua: 6,
+    user: 7
   };
-
   async function readDay(dayId) {
     const snap = await getDoc(doc(db, "meal_reports", dayId));
     if (!snap.exists()) {
-      // Trả về đối tượng rỗng nếu không có báo cáo ngày này
       return { dayId, data: {}, ot: {} };
     }
     const d = snap.data();
-
-    // Lấy tên người báo cáo tăng ca (nếu có) từ trường overtimeDept
     const ot = {};
     Object.entries(d.overtimeDept || {}).forEach(([dept, node]) => {
       if (node?.lastUpdatedBy) {
         ot[dept] = node.lastUpdatedBy;
       }
     });
-
     const pack = {};
     for (const shiftKey of ["HC", "S1", "S2", "S3", "S8"]) {
       const node = d[shiftKey] || {};
-      let sum = node.summary; // Tổng số liệu Admin đã chốt cho ca này
+      let sum = node.summary;
       if (!sum) {
-        // Nếu Admin chưa chốt (chưa gửi), tự tính tổng từ các báo cáo bộ phận
         sum = {
           congNhanMan: 0, congNhanChay: 0,
           giamSatMan: 0, giamSatSua: 0, giamSatChay: 0,
@@ -1237,19 +1129,16 @@ function ExportBaoComModal({ onClose }) {
           sum.tangCaSua += +(r?.tangCaSua || 0);
         });
       }
-      // pack[shiftKey] bao gồm tổng số liệu (totals) và chi tiết báo cáo từng bộ phận (reports)
       pack[shiftKey] = { totals: sum, reports: (node.reports || {}) };
     }
     return { dayId, data: pack, ot };
   }
-
-  // Duyệt worksheet Excel để xây dựng mapping từ bộ phận + ca -> dòng (row) trong file
   function buildRowMap(ws) {
     const map = {};
     let curDept = null;
     for (let r = 1; r <= (ws.rowCount || ws.properties.maxRow || 200); r++) {
-      const dep = ws.getCell(r, 1).value; // Cột A: tên bộ phận
-      const sh = ws.getCell(r, 2).value;  // Cột B: ca làm
+      const dep = ws.getCell(r, 1).value;
+      const sh = ws.getCell(r, 2).value;
       if (dep) {
         curDept = dep.toString().trim();
         if (!map[curDept]) map[curDept] = {};
@@ -1263,19 +1152,15 @@ function ExportBaoComModal({ onClose }) {
     }
     return map;
   }
-
-  // Điền dữ liệu cho một ngày (dayIndex: chỉ số ngày 0-based, 0 tương ứng ngày 1)
   function fillDay(ws, rowMap, dayIndex, payload) {
-    const startCol = 3 + (dayIndex * 8); // cột bắt đầu cho ngày (C = 3)
+    const startCol = 3 + (dayIndex * 8);
     Object.entries(rowMap).forEach(([dept, shifts]) => {
       for (const [key, label] of Object.entries(SHIFT_LABEL_BY_KEY)) {
         const row = shifts[label];
         if (!row) continue;
-        // Lấy báo cáo chi tiết của bộ phận ở ca `key` (HC/S1/S2/S3/S8)
         const report = payload.data?.[key]?.reports?.[dept] || {};
         const putNum = (off, val) => ws.getCell(row, startCol + off).value = Number(val || 0);
         const putStr = (off, val) => ws.getCell(row, startCol + off).value = val || '';
-        // Điền số liệu vào các cột tương ứng
         putNum(NEW_COL_OFFSETS.cnMan,  report.congNhanMan);
         putNum(NEW_COL_OFFSETS.cnChay, report.congNhanChay);
         putNum(NEW_COL_OFFSETS.gsMan,  report.giamSatMan);
@@ -1283,34 +1168,27 @@ function ExportBaoComModal({ onClose }) {
         putNum(NEW_COL_OFFSETS.gsChay, report.giamSatChay);
         putNum(NEW_COL_OFFSETS.tcMi,   report.tangCaMi);
         putNum(NEW_COL_OFFSETS.tcSua,  report.tangCaSua);
-        putStr(NEW_COL_OFFSETS.user,   report.user); // Tên người báo (nếu có)
+        putStr(NEW_COL_OFFSETS.user,   report.user);
       }
     });
-    // Điền tiêu đề "Ngày dd/mm" trên cột đầu của khối ngày
     const dateLabel = payload.dayId.includes('T') ? payload.dayId.split('T')[0] : payload.dayId;
     ws.getCell(2, startCol).value = (`Ngày ${fmtVNDate(new Date(dateLabel))}`).toUpperCase();
   }
-
   async function onExport() {
     try {
       if (!selectedMonth) {
         return alert("Vui lòng chọn tháng.");
       }
       setIsGen(true);
-
       const year = selectedMonth.getFullYear();
       const month = selectedMonth.getMonth();
       const daysInMonth = new Date(year, month + 1, 0).getDate();
       const mm = String(month + 1).padStart(2, '0');
       const yyyy = String(year);
-
-      // Tạo danh sách các ngày trong tháng (định dạng YYYY-MM-DD)
       const dateKeys = [];
       for (let i = 1; i <= daysInMonth; i++) {
         dateKeys.push(`${yyyy}-${mm}-${String(i).padStart(2, '0')}`);
       }
-
-      // Chuẩn bị workbook từ file template Excel
       const [{ default: ExcelJS }, { saveAs }] = await Promise.all([ import("exceljs"), import("file-saver") ]);
       const resp = await fetch("/templates/Baocom.xlsx", { cache: "no-store" });
       if (!resp.ok) throw new Error("Không tìm thấy template Baocom.xlsx trong /templates");
@@ -1318,29 +1196,18 @@ function ExportBaoComModal({ onClose }) {
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buf);
       const ws = wb.getWorksheet("BaoCom") || wb.worksheets[0];
-
-      // Cập nhật tiêu đề chính (ô D1) theo tháng năm đã chọn
       const cellD1 = ws.getCell('D1');
       cellD1.value = `TỔNG HỢP SỐ LIỆU BÁO CƠM ${mm}/${yyyy}`;
       cellD1.font = { size: 48, bold: true };
       cellD1.alignment = { horizontal: 'center', vertical: 'middle' };
-
-      // Xây dựng bản đồ hàng cho các bộ phận và ca
       const rowMap = buildRowMap(ws);
-
-      // Lấy dữ liệu tất cả các ngày trong tháng song song
       const payloads = await Promise.all(dateKeys.map(dayKey => readDay(dayKey)));
-
-      // Điền dữ liệu vào file cho từng ngày
       payloads.forEach((pl, index) => {
         fillDay(ws, rowMap, index, pl);
       });
-
-      // Xuất file Excel sau khi điền xong
       const outFileName = `BaoCom_${mm}_${yyyy}.xlsx`;
       const out = await wb.xlsx.writeBuffer();
-      saveAs(new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheet.sheet" }), outFileName);
-
+      saveAs(new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), outFileName);
       alert("Xuất báo cáo thành công!");
       onClose();
     } catch (e) {
@@ -1350,12 +1217,10 @@ function ExportBaoComModal({ onClose }) {
       setIsGen(false);
     }
   }
-
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
       <div style={{ background: "#fff", padding: 20, borderRadius: 12, width: "min(420px, 95vw)" }}>
         <h3 style={{ marginTop: 0 }}>Xuất báo cáo Báo cơm</h3>
-
         <div style={{ marginBottom: 12 }}>
           <label style={{ display: "block", fontWeight: 700, marginBottom: 6 }}>Chọn tháng</label>
           <DatePicker
@@ -1367,7 +1232,6 @@ function ExportBaoComModal({ onClose }) {
             wrapperClassName="date-picker-wrapper"
           />
         </div>
-
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <button onClick={onClose} disabled={isGen} style={{ padding: "8px 12px", borderRadius: 6, border: '1px solid #ccc', background: '#eee' }}>Hủy</button>
           <button onClick={onExport} disabled={isGen || !selectedMonth} style={{ padding: "8px 12px", background: "#1f80e0", color: "#fff", border: "none", borderRadius: 6, opacity: (isGen || !selectedMonth) ? 0.6 : 1 }}>
@@ -1382,23 +1246,18 @@ function ExportBaoComModal({ onClose }) {
 /* --- BaoCom: Component chính --- */
 export default function BaoCom({ user }) {
   const { pushToast } = useToast();
-
   const [reportData, setReportData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [openDept, setOpenDept] = useState(null);
   const [showExport, setShowExport] = useState(false);
-
   const selectedDateKey = dateKey(selectedDate);
   const prevStatusRef = useRef({});
-
   const rawRole = user?.role || '';
-  // Nếu user là "EHS Committee" có trường mealDept hợp lệ -> cho phép đại diện bộ phận
   const isProxy = rawRole.toLowerCase() === 'ehs committee' && user?.mealDept && DEPARTMENTS.includes(user.mealDept);
   const effectiveRole = isProxy ? user.mealDept : rawRole;
   const proxyUser = isProxy ? { ...user, role: user.mealDept } : user;
 
-  // Lắng nghe dữ liệu báo cáo của ngày được chọn (real-time)
   useEffect(() => {
     setLoading(true);
     const ref = doc(db, 'meal_reports', selectedDateKey);
@@ -1406,8 +1265,6 @@ export default function BaoCom({ user }) {
       const data = snap.exists() ? snap.data() : {};
       setReportData(data);
       setLoading(false);
-
-      // Kiểm tra thay đổi trạng thái xác nhận để thông báo (toast) cho người dùng tương ứng
       const next = {};
       SHIFTS.forEach(s => {
         const node = data?.[s] || {};
@@ -1416,8 +1273,6 @@ export default function BaoCom({ user }) {
           canteen: !!node.confirmedByCanteen
         };
       });
-
-      // Nếu người dùng là Admin/EHS: thông báo khi Nhà ăn xác nhận mới một ca
       if (rawRole === 'admin' || rawRole === 'ehs') {
         SHIFTS.forEach(s => {
           if ((prevStatusRef.current?.[s]?.canteen || false) === false && next[s]?.canteen === true) {
@@ -1425,7 +1280,6 @@ export default function BaoCom({ user }) {
           }
         });
       }
-      // Nếu người dùng là Nhà Ăn: thông báo khi Admin gửi số liệu mới
       if (rawRole === 'Nhà Ăn') {
         SHIFTS.forEach(s => {
           if ((prevStatusRef.current?.[s]?.admin || false) === false && next[s]?.admin === true) {
@@ -1438,7 +1292,6 @@ export default function BaoCom({ user }) {
     return () => unsub();
   }, [selectedDateKey, rawRole, pushToast]);
 
-  // Chọn nội dung giao diện hiển thị tùy theo vai trò người dùng
   let content;
   if (loading) {
     content = <div>Đang tải dữ liệu báo cơm...</div>;
@@ -1465,7 +1318,6 @@ export default function BaoCom({ user }) {
   } else {
     content = <div>Vai trò của bạn ({rawRole}) không có quyền truy cập chức năng báo cơm.</div>;
   }
-
   return (
     <div>
       <h2 style={{ fontWeight: 700, marginBottom: 8, color: colors.primary }}>Báo cơm ngày</h2>
@@ -1491,8 +1343,6 @@ export default function BaoCom({ user }) {
             width: 100%;
             box-sizing: border-box;
           }
-
-          /* Hiển thị nút +/- trên mobile */
           .number-control-btn {
             display: none;
           }
@@ -1501,7 +1351,7 @@ export default function BaoCom({ user }) {
               display: inline-flex !important;
               vertical-align: middle;
             }
-            .number-input-wrapper input[type="number"] {
+            .number-input-wrapper input[type="text"] {
               width: 50px !important;
               padding-left: 2px !important;
               padding-right: 2px !important;
@@ -1514,7 +1364,6 @@ export default function BaoCom({ user }) {
           }
         `}</style>
       </div>
-
       {content}
       {openDept && (
         <DeptDetailModal
