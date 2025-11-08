@@ -1,6 +1,7 @@
 // Tệp: App.jsx
-// SỬA LỖI: Thêm try...catch vào trong onAuthStateChanged
-// để xử lý lỗi promise (Uncaught in promise)
+// SỬA LỖI: Viết lại onAuthStateChanged để không dùng async/await
+// mà dùng .then().catch() để xử lý lỗi promise.
+
 import React, { useState, useEffect } from "react";
 import Login from "./components/Login";
 import GembaCheckList from "./components/gembachecklist";
@@ -89,12 +90,15 @@ export default function App() {
     // =================================================================
     // === BẮT ĐẦU SỬA LỖI (Uncaught in promise)                      ===
     // =================================================================
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      try { // Thêm try...
-        if (firebaseUser) {
-          const ref = doc(db, "users", firebaseUser.uid);
-          const snap = await getDoc(ref); // Lệnh await này có thể gây lỗi
+    // Callback của onAuthStateChanged KHÔNG NÊN là async.
+    // Chúng ta xử lý promise bằng .then.catch bên trong.
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        // Người dùng đã đăng nhập, gọi getDoc
+        const ref = doc(db, "users", firebaseUser.uid);
+        getDoc(ref).then(snap => {
           if (snap.exists()) {
+            // Tìm thấy user trong DB
             const data = snap.data();
             const userData = { uid: firebaseUser.uid, email: firebaseUser.email, ...data };
             setUser(userData);
@@ -102,29 +106,30 @@ export default function App() {
             const roleN = normalizeRole(userData.role);
             const isDept = deptRolesNormalized.has(roleN);
             const isCanteen = roleN === CANTEEN_NORMALIZED;
-            
             setTab(isDept || isCanteen ? 7 : 0);
-            
           } else {
-            // Nếu không tìm thấy thông tin user trong 'users' (ví dụ: bị xóa)
-            setUser(null); 
+            // User có trong Auth nhưng không có trong DB (lỗi dữ liệu)
+            setUser(null);
           }
-        } else {
+        }).catch(error => {
+          // Lỗi khi gọi getDoc
+          console.error("Lỗi khi lấy thông tin user:", error);
           setUser(null);
-        }
-      } catch (error) { // Thêm ...catch
-        // Xử lý bất kỳ lỗi nào xảy ra khi getDoc
-        console.error("Lỗi khi kiểm tra trạng thái đăng nhập:", error);
-        setUser(null); // Đảm bảo logout nếu có lỗi
-      } finally { // Thêm finally
-        setLoading(false);
+        }).finally(() => {
+          // Luôn tắt loading sau khi getDoc xong
+          setLoading(false);
+        });
+      } else {
+        // Người dùng đã đăng xuất hoặc chưa đăng nhập
+        setUser(null);
+        setLoading(false); // Tắt loading
       }
-      // =================================================================
-      // === KẾT THÚC SỬA LỖI                                          ===
-      // =================================================================
     });
+    // =================================================================
+    // === KẾT THÚC SỬA LỖI                                          ===
+    // =================================================================
     return () => unsubscribe();
-  }, []);
+  }, []); // Chỉ chạy 1 lần khi mount
 
   useEffect(() => {
     if (!user) return;
@@ -168,7 +173,7 @@ export default function App() {
     try {
       await signOut(auth);
       // setUser(null) và setLoading(false) sẽ được xử lý tự động
-      // bởi onAuthStateChanged
+      // bởi onAuthStateChanged khi nó chạy lại.
     } catch (e) {
       console.error("Lỗi đăng xuất:", e);
     }
