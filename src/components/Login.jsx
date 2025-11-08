@@ -1,3 +1,6 @@
+// Tệp: Login.jsx
+// SỬA LỖI 1: Thêm 'mealDept' vào 'appUser' để App.jsx hoạt động đúng
+// SỬA LỖI 2: Thêm 'autoComplete' để sửa cảnh báo (DOM warning)
 import React, { useState, useEffect } from 'react';
 import { auth, db } from '../firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
@@ -38,12 +41,19 @@ function Login({ setUser }) {
 
       if (userDocSnap.exists()) {
         const userData = userDocSnap.data();
+        
+        // =================================================================
+        // === SỬA LỖI 1: Thêm 'mealDept'                                ===
+        // =================================================================
+        // (App.jsx cần trường này để biết 'ehs committee' được ủy quyền cho bộ phận nào)
         const appUser = {
             uid: firebaseUser.uid,
             email: firebaseUser.email,
             name: userData.name,
             role: userData.role,
+            mealDept: userData.mealDept // <-- ĐÃ THÊM
         };
+        // =================================================================
 
         if (rememberMe) {
           localStorage.setItem('rememberedEmail', email);
@@ -113,6 +123,11 @@ function Login({ setUser }) {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            // =================================================================
+            // === SỬA LỖI 2: Thêm 'autoComplete' (sửa cảnh báo DOM)         ===
+            // =================================================================
+            autoComplete="username" 
+            // =================================================================
             style={{
               width: '100%',
               padding: '12px 15px',
@@ -135,6 +150,11 @@ function Login({ setUser }) {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            // =================================================================
+            // === SỬA LỖI 2: Thêm 'autoComplete' (sửa cảnh báo DOM)         ===
+            // =================================================================
+            autoComplete="current-password"
+            // =================================================================
             style={{
               width: '100%',
               padding: '12px 15px',
