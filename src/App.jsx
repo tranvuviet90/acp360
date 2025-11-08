@@ -98,14 +98,7 @@ export default function App() {
           const isDept = deptRolesNormalized.has(roleN);
           const isCanteen = roleN === CANTEEN_NORMALIZED;
           
-          // --- SỬA LỖI TẠI ĐÂY ---
-          // CHANGED: Chỉ tự động chuyển đến tab Báo cơm (index 7) nếu người dùng
-          // có vai trò là một bộ phận hoặc là nhà ăn.
-          // Người dùng "ehs committee" được ủy quyền sẽ không bị chuyển tab,
-          // họ sẽ ở lại tab mặc định là 0. Logic hiển thị tab đã được xử lý
-          // trong MagicMenu.jsx nên tab Báo cơm vẫn sẽ xuất hiện.
           setTab(isDept || isCanteen ? 7 : 0);
-          // --- KẾT THÚC SỬA LỖI ---
           
         } else {
           setUser(null);
