@@ -1,6 +1,6 @@
 // Tệp: App.jsx
-// SỬA LỖI: Viết lại onAuthStateChanged để không dùng async/await
-// mà dùng .then().catch() để xử lý lỗi promise.
+// SỬA LỖI: Thêm kiểm tra 'firebaseUser.uid' để phòng thủ
+// trước các lỗi hỏng trạng thái auth (onboarding.js)
 
 import React, { useState, useEffect } from "react";
 import Login from "./components/Login";
@@ -32,7 +32,6 @@ const departments = [
   { name: "MTN" }, { name: "ENG" },
 ];
 
-// CHANGED: Đã sửa "Q_QC" thành "G_QC"
 const departmentRoles = [
   "G_Cutting","G_Rolling","G_Finishing","G_Dipping","G_Buffing","G_Graphics",
   "G_QC","A_QC","QC_Management","Kayak","A_Rolling","A_Cosmetics","Planning",
@@ -87,49 +86,40 @@ export default function App() {
   const { t } = useI18n();
 
   useEffect(() => {
-    // =================================================================
-    // === BẮT ĐẦU SỬA LỖI (Uncaught in promise)                      ===
-    // =================================================================
-    // Callback của onAuthStateChanged KHÔNG NÊN là async.
-    // Chúng ta xử lý promise bằng .then.catch bên trong.
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
-        // Người dùng đã đăng nhập, gọi getDoc
+      // =================================================================
+      // === SỬA LỖI: Thêm kiểm tra 'firebaseUser.uid'                  ===
+      // =================================================================
+      // Đề phòng trường hợp `onboarding.js` lỗi và trả về
+      // `firebaseUser` không hợp lệ (nhưng không null)
+      if (firebaseUser && firebaseUser.uid) { 
         const ref = doc(db, "users", firebaseUser.uid);
         getDoc(ref).then(snap => {
           if (snap.exists()) {
-            // Tìm thấy user trong DB
             const data = snap.data();
             const userData = { uid: firebaseUser.uid, email: firebaseUser.email, ...data };
             setUser(userData);
-
             const roleN = normalizeRole(userData.role);
             const isDept = deptRolesNormalized.has(roleN);
             const isCanteen = roleN === CANTEEN_NORMALIZED;
             setTab(isDept || isCanteen ? 7 : 0);
           } else {
-            // User có trong Auth nhưng không có trong DB (lỗi dữ liệu)
             setUser(null);
           }
         }).catch(error => {
-          // Lỗi khi gọi getDoc
           console.error("Lỗi khi lấy thông tin user:", error);
           setUser(null);
         }).finally(() => {
-          // Luôn tắt loading sau khi getDoc xong
           setLoading(false);
         });
       } else {
-        // Người dùng đã đăng xuất hoặc chưa đăng nhập
+        // Người dùng đã đăng xuất, chưa đăng nhập, hoặc auth state bị hỏng
         setUser(null);
-        setLoading(false); // Tắt loading
+        setLoading(false);
       }
     });
-    // =================================================================
-    // === KẾT THÚC SỬA LỖI                                          ===
-    // =================================================================
     return () => unsubscribe();
-  }, []); // Chỉ chạy 1 lần khi mount
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -172,8 +162,6 @@ export default function App() {
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      // setUser(null) và setLoading(false) sẽ được xử lý tự động
-      // bởi onAuthStateChanged khi nó chạy lại.
     } catch (e) {
       console.error("Lỗi đăng xuất:", e);
     }
