@@ -1,6 +1,7 @@
 // Tệp: BaoCom.jsx
-// Sửa lỗi React #310 bằng cách đổi tên NumberInput -> _NumberInput
-// và gọi nó như một component JSX <_NumberInput ... />
+// Đã sửa lỗi React #310: Di chuyển hook `makeOnChange` lên trước
+// câu lệnh `return` sớm trong `DepartmentView`.
+
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { db } from '../firebase';
 import {
@@ -52,7 +53,6 @@ const fmtTime = (t) => {
 };
 
 /* --- Custom Hook: useLongPress (for mobile long-press) --- */
-// (Logic useLongPress của bạn đã chính xác, giữ nguyên)
 const useLongPress = (callback, onClick, ms = 80) => {
   const timeoutRef = useRef();
   const intervalRef = useRef();
@@ -97,16 +97,9 @@ const useLongPress = (callback, onClick, ms = 80) => {
   };
 };
 
-
 /* --- NumberInput: Ô nhập số với nút +/- cho mobile (memo để giảm re-render) --- */
-// =================================================================
-// === BẮT ĐẦU SỬA LỖI #310                                       ===
-// =================================================================
-// Đổi tên thành _NumberInput (component nội bộ, viết hoa)
+// (Đổi tên thành _NumberInput để React xử lý như 1 component)
 const _NumberInput = React.memo(function NumberInput({ value, onChange, min = 0, style, placeholder = "Nhập" }) {
-// =================================================================
-// === KẾT THÚC SỬA LỖI #310                                      ===
-// =================================================================
   const shown = (value === 0 || value === null || value === undefined) ? '' : value;
   const safeVal = Number(value || 0);
 
@@ -255,14 +248,21 @@ function DepartmentView({ user, reportData, selectedDateKey }) {
     }
   }, [formData, reportData, buildFormFromReport]);
 
-  if (!formData[SHIFTS[0]]) {
-    return <div>Đang tải form...</div>;
-  }
-
+  // =================================================================
+  // === BẮT ĐẦU SỬA LỖI #310                                       ===
+  // =================================================================
+  // Di chuyển hook `useCallback` này lên TRƯỚC câu lệnh `if`
   const makeOnChange = useCallback((shift, key) => (n) => {
     if (Number.isNaN(n) || n < 0) return;
     setFormData(prev => ({ ...prev, [shift]: { ...prev[shift], [key]: n } }));
   }, []);
+  // =================================================================
+  // === KẾT THÚC SỬA LỖI #310                                      ===
+  // =================================================================
+
+  if (!formData[SHIFTS[0]]) {
+    return <div>Đang tải form...</div>;
+  }
 
   const saveShift = async (shift) => {
     const docRef = doc(db, 'meal_reports', selectedDateKey);
@@ -349,9 +349,6 @@ function DepartmentView({ user, reportData, selectedDateKey }) {
               {Object.entries(MEAL_TYPES.congNhan).map(([k, label]) => (
                 <div key={k} style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <label>{label}: </label>
-                  {/* ================================================================= */}
-                  {/* === SỬA LỖI #310: Gọi <_NumberInput ... />                     === */}
-                  {/* ================================================================= */}
                   <_NumberInput value={formData[shift][k]} onChange={makeOnChange(shift, k)} />
                 </div>
               ))}
@@ -361,9 +358,6 @@ function DepartmentView({ user, reportData, selectedDateKey }) {
               {Object.entries(MEAL_TYPES.giamSat).map(([k, label]) => (
                 <div key={k} style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <label>{label}: </label>
-                  {/* ================================================================= */}
-                  {/* === SỬA LỖI #310: Gọi <_NumberInput ... />                     === */}
-                  {/* ================================================================= */}
                   <_NumberInput value={formData[shift][k]} onChange={makeOnChange(shift, k)} />
                 </div>
               ))}
@@ -373,9 +367,6 @@ function DepartmentView({ user, reportData, selectedDateKey }) {
               {Object.entries(MEAL_TYPES.tangCa).map(([k, label]) => (
                 <div key={k} style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <label>{label}: </label>
-                  {/* ================================================================= */}
-                  {/* === SỬA LỖI #310: Gọi <_NumberInput ... />                     === */}
-                  {/* ================================================================= */}
                   <_NumberInput value={formData[shift][k]} onChange={makeOnChange(shift, k)} />
                 </div>
               ))}
@@ -642,7 +633,7 @@ function AdminView({ user, reportData, selectedDateKey, onDeptClick, onOpenExpor
     try {
       await batch.commit();
       const alreadySentBefore = !!reportData?.[shift]?.confirmedByAdmin;
-      pushToast(`${alreadySentBefore ? 'Đã gửi lại' : 'Đã gửi'} ${SHIFT_NAMES[shift]} cho Nhà Ăn.`, 'success');
+      pushToast(`${alreadySentBefore ? 'Gửi lại' : 'Đã gửi'} ${SHIFT_NAMES[shift]} cho Nhà Ăn.`, 'success');
     } catch (e) {
       console.error(e);
       pushToast('Xác nhận thất bại.', 'error');
@@ -769,9 +760,6 @@ function AdminView({ user, reportData, selectedDateKey, onDeptClick, onOpenExpor
                             <Delta diff={diff} />
                           </td>
                           <td style={{ padding: 8, border: '1px solid #f0f0f0', textAlign: 'center' }}>
-                            {/* ================================================================= */}
-                            {/* === SỬA LỖI #310: Gọi <_NumberInput ... />                     === */}
-                            {/* ================================================================= */}
                             <_NumberInput value={adjustedTotals[shift]?.[k] ?? 0} onChange={(n) => onAdjust(shift, k, n)} />
                           </td>
                         </tr>
