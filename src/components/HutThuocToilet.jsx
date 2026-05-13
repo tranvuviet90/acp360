@@ -8,6 +8,7 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage
 import imageCompression from 'browser-image-compression';
 import { colors } from "../theme";
 import LightboxSwipeOnly from "./LightboxSwipeOnly";
+import { useI18n } from "../i18n/I18nProvider";
 
 const orange = colors.primary;
 const orangeLight = colors.primaryLight;
@@ -40,6 +41,7 @@ function UndoIcon({ size = 20 }) {
 // ===============================================================
 
 function HutThuocToilet({ user }) {
+  const { t } = useI18n();
   const [selected, setSelected] = useState([]);
   const [note, setNote] = useState('');
   const [files, setFiles] = useState([]);
@@ -95,7 +97,7 @@ function HutThuocToilet({ user }) {
   const handleImageChange = async (e) => {
     if (e.target.files && e.target.files.length > 0) {
       const selectedFiles = Array.from(e.target.files);
-      const compressionOptions = { maxSizeMB: 3, maxWidthOrHeight: 1920, useWebWorker: true };
+      const compressionOptions = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: true };
       try {
         const processedFiles = await Promise.all(selectedFiles.map(file => {
           if (file.size > compressionOptions.maxSizeMB * 1024 * 1024) return imageCompression(file, compressionOptions);
@@ -138,7 +140,7 @@ function HutThuocToilet({ user }) {
 
   // Soft/Permanent delete (giữ nguyên)
   const handleSoftDelete = async (entryId) => {
-    if (window.confirm("Bạn có muốn yêu cầu xóa mục này không? EHS/Admin sẽ xem xét.")) {
+    if (window.confirm(t("common.confirmDelete"))) {
       const docRef = doc(db, "hutthuoc_history", entryId);
       await updateDoc(docRef, { pendingDeletion: true });
     }
@@ -148,7 +150,7 @@ function HutThuocToilet({ user }) {
     await updateDoc(docRef, { pendingDeletion: false });
   };
   const handlePermanentDelete = async (entryToDelete) => {
-    if (!window.confirm("Bạn có chắc muốn XÓA VĨNH VIỄN mục lịch sử này không?")) return;
+    if (!window.confirm(t("common.confirmPermanentDelete"))) return;
     try {
       if (entryToDelete.images?.length) {
         for (const url of entryToDelete.images) {
@@ -180,7 +182,7 @@ function HutThuocToilet({ user }) {
 
   return (
     <div>
-      <h2 style={{ fontWeight: 700, marginBottom: 22, color: orange }}>Lịch sử kiểm tra hút thuốc toilet</h2>
+      <h2 style={{ fontWeight: 700, marginBottom: 22, color: orange }}>{t("smoking.title")}</h2>
       <div>
         <div ref={dropdownRef} style={{ position: 'relative', minWidth: 220, marginBottom: 15 }}>
           <button
@@ -225,18 +227,18 @@ function HutThuocToilet({ user }) {
             type="text"
             value={note}
             onChange={e => setNote(e.target.value)}
-            placeholder="Thêm ghi chú nếu cần..."
+            placeholder={t("smoking.note.label")}
             style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: `1.2px solid ${orangeLight}`, color: dark, background: "#fff", minWidth: 200 }}
           />
           <div style={{display: 'flex', alignItems: 'center', gap: 10}}>
             <input type="file" accept="image/jpeg, image/png, image/jpg" ref={fileRef} id="imageUploadHutThuoc" multiple onChange={handleImageChange} style={{ display: 'none' }} />
-            <label htmlFor="imageUploadHutThuoc" style={{ background: 'white', color: orange, border: `1.2px solid ${orangeLight}`, borderRadius: 8, padding: '8px 15px', cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' }}>Ảnh đính kèm</label>
+            <label htmlFor="imageUploadHutThuoc" style={{ background: 'white', color: orange, border: `1.2px solid ${orangeLight}`, borderRadius: 8, padding: '8px 15px', cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' }}>{t("common.attach")}</label>
             <span style={{fontStyle: 'italic', fontSize: 14, color: '#555'}}>
-              {fileNames.length ? `${fileNames.length} ảnh` : "Chưa có ảnh"}
+              {fileNames.length ? `${fileNames.length} ảnh` : t("common.noImage")}
             </span>
           </div>
           <button onClick={handleSave} style={{ background: orange, color: "#fff", border: "none", padding: "10px 22px", borderRadius: 8, fontWeight: 700, fontSize: 15, cursor: "pointer", marginLeft: 'auto' }}>
-            Lưu
+            {t("common.save")}
           </button>
         </div>
       </div>
@@ -248,15 +250,15 @@ function HutThuocToilet({ user }) {
         return (
           <div key={l.id} className="card" style={{ marginBottom: 8, padding: 10, border: `1px solid ${l.pendingDeletion ? '#f00' : orangeLight}`, borderRadius: 10, background: l.pendingDeletion ? '#fff0f0' : "#fff6ea", opacity: l.pendingDeletion && userRole !== 'admin' && userRole !== 'ehs' ? 0.5 : 1 }}>
             <div className="row between" style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-              <div className="bold">{l.by} — {l.time} {l.pendingDeletion && <span style={{color: 'red', fontWeight:'bold'}}>(Chờ xóa)</span>}</div>
+              <div className="bold">{l.by} — {l.time} {l.pendingDeletion && <span style={{color: 'red', fontWeight:'bold'}}>{t("common.pendingDelete")}</span>}</div>
               <div>
                 {l.pendingDeletion && (userRole === 'admin' || userRole === 'ehs') ? (
                   <div style={{display: 'flex', gap: '8px'}}>
-                    <button title="Xác nhận xóa" onClick={() => handlePermanentDelete(l)} style={{ background:'transparent', border:'none', padding:4, cursor:'pointer' }}><CheckIcon/></button>
-                    <button title="Hủy yêu cầu xóa" onClick={() => handleCancelDelete(l.id)} style={{ background:'transparent', border:'none', padding:4, cursor:'pointer' }}><UndoIcon/></button>
+                    <button title={t("chat.title.confirm.delete")} onClick={() => handlePermanentDelete(l)} style={{ background:'transparent', border:'none', padding:4, cursor:'pointer' }}><CheckIcon/></button>
+                    <button title={t("chat.title.cancel.delete")} onClick={() => handleCancelDelete(l.id)} style={{ background:'transparent', border:'none', padding:4, cursor:'pointer' }}><UndoIcon/></button>
                   </div>
                 ) : canInitiateDelete && !l.pendingDeletion ? (
-                  <button title="Yêu cầu xóa" onClick={()=> handleSoftDelete(l.id)} style={{ background:'transparent', border:'none', padding:4, cursor:'pointer' }}>
+                  <button title={t("chat.title.request.delete")} onClick={()=> handleSoftDelete(l.id)} style={{ background:'transparent', border:'none', padding:4, cursor:'pointer' }}>
                     <RedXIcon />
                   </button>
                 ) : null}
@@ -275,7 +277,7 @@ function HutThuocToilet({ user }) {
         )
       })}
 
-      {clippedHistory.length === 0 && history.length === 0 && <div>Chưa có dữ liệu.</div>}
+      {clippedHistory.length === 0 && history.length === 0 && <div>{t("common.noData")}</div>}
       
       {hasMore && (
         <div style={{justifyContent:"center", display:'flex', marginTop:8}}>
@@ -290,7 +292,7 @@ function HutThuocToilet({ user }) {
               fontWeight: 600
             }}
           >
-            Xem thêm
+            {t("common.loadMore")}
           </button>
         </div>
       )}

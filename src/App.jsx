@@ -1,8 +1,8 @@
 // Tệp đã sửa lỗi: App.jsx
-// Lỗi: Chữ 'g' trong 'gembachecklist' đã được sửa thành viết thường
+// Đã thêm logic để không fetch-count nếu là vai trò 'Bộ phận' hoặc 'Nhà Ăn'
 import React, { useState, useEffect } from "react";
 import Login from "./components/Login";
-import GembaCheckList from "./components/gembachecklist"; // <-- ĐÃ SỬA LỖI TẠI ĐÂY
+import GembaCheckList from "./components/gembachecklist";
 import TuGemba from "./components/TuGemba";
 import Bodam from "./components/Bodam";
 import Calamviec from "./components/Calamviec";
@@ -10,10 +10,13 @@ import HutThuocToilet from "./components/HutThuocToilet";
 import GiaiLaoChat from "./components/GiaiLaoChat";
 import GiamSatNhaRac from "./components/GiamSatNhaRac";
 import BaoCom from "./components/BaoCom";
+import UserSettings from "./components/UserSettings";
+import UserManager from "./components/UserManager";
+import NotificationBell from "./components/NotificationBell";
 import logo from "./assets/logo.png";
 import { auth, db } from "./firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { doc, getDoc, collection, query, where, Timestamp, getCountFromServer } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, Timestamp, getCountFromServer, setDoc } from "firebase/firestore";
 import "./App.css";
 
 import MagicMenu from "./components/MagicMenu";
@@ -44,14 +47,17 @@ const deptRolesNormalized = new Set(departmentRoles.map(normalizeRole));
 const CANTEEN_NORMALIZED = normalizeRole("Nhà Ăn");
 
 function useWindowSize() {
-  const [windowSize, setWindowSize] = useState({ width: undefined, height: undefined });
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   useEffect(() => {
-    const handleResize = () => setWindowSize({ width: window.innerWidth, height: window.innerHeight });
+    const handleResize = () => {
+      if (window.innerWidth !== windowWidth) {
+        setWindowWidth(window.innerWidth);
+      }
+    };
     window.addEventListener("resize", handleResize);
-    handleResize();
     return () => window.removeEventListener("resize", handleResize);
-  }, []);
-  return windowSize;
+  }, [windowWidth]);
+  return { width: windowWidth };
 }
 
 function ToastBridge() {
@@ -84,6 +90,13 @@ export default function App() {
 
   const { t } = useI18n();
 
+  // --- THÊM: ĐƯA BIẾN KIỂM TRA ROLE RA NGOÀI ĐỂ DÙNG CHUNG (Chống Ghost Mount) ---
+  const roleN = user ? normalizeRole(user.role) : "";
+  const isDept = deptRolesNormalized.has(roleN);
+  const isCanteen = roleN === CANTEEN_NORMALIZED;
+  const isRestrictedRole = isDept || isCanteen; 
+  // ---------------------------------------------------------------------------------
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
@@ -94,9 +107,9 @@ export default function App() {
           const userData = { uid: firebaseUser.uid, email: firebaseUser.email, ...data };
           setUser(userData);
 
-          const roleN = normalizeRole(userData.role);
-          const isDept = deptRolesNormalized.has(roleN);
-          const isCanteen = roleN === CANTEEN_NORMALIZED;
+          const currentRoleN = normalizeRole(userData.role);
+          const currentIsDept = deptRolesNormalized.has(currentRoleN);
+          const currentIsCanteen = currentRoleN === CANTEEN_NORMALIZED;
           
           // --- SỬA LỖI TẠI ĐÂY ---
           // CHANGED: Chỉ tự động chuyển đến tab Báo cơm (index 7) nếu người dùng
@@ -104,7 +117,7 @@ export default function App() {
           // Người dùng "ehs committee" được ủy quyền sẽ không bị chuyển tab,
           // họ sẽ ở lại tab mặc định là 0. Logic hiển thị tab đã được xử lý
           // trong MagicMenu.jsx nên tab Báo cơm vẫn sẽ xuất hiện.
-          setTab(isDept || isCanteen ? 7 : 0);
+          setTab(currentIsDept || currentIsCanteen ? 7 : 0);
           // --- KẾT THÚC SỬA LỖI ---
           
         } else {
@@ -120,8 +133,33 @@ export default function App() {
 
   useEffect(() => {
     if (!user) return;
+
+    // =================================================================
+    // === BẮT ĐẦU SỬA LỖI 403 (Permission Denied) CHO VAI TRÒ BỘ PHẬN ===
+    // =================================================================
+    // Nếu là vai trò 'Bộ phận' hoặc 'Nhà ăn', họ không cần xem
+    // thông báo Gemba/TuGemba (vì menu bị ẩn).
+    // Bỏ qua việc fetch counts để tránh lỗi 403 và tối ưu.
+    if (isRestrictedRole) {
+      setGembaNotifCounts({});
+      setTuGembaNotifCounts({});
+      return;
+    }
+
     const fetchCountsForTab = async (collectionName, storageKey, setCountFunction) => {
-      const lastSeenTimestamps = JSON.parse(localStorage.getItem(storageKey) || "{}");
+      // Ƭu tiên lấy từ Firestore (cross-device), fallback về localStorage
+      let lastSeenTimestamps = {};
+      try {
+        const prefRef = doc(db, "user_prefs", user.uid);
+        const prefSnap = await getDoc(prefRef);
+        if (prefSnap.exists() && prefSnap.data()[storageKey]) {
+          lastSeenTimestamps = prefSnap.data()[storageKey];
+        } else {
+          lastSeenTimestamps = JSON.parse(localStorage.getItem(storageKey) || "{}");
+        }
+      } catch {
+        lastSeenTimestamps = JSON.parse(localStorage.getItem(storageKey) || "{}");
+      }
       const counts = {};
       const promises = departments.map(async (dept) => {
         const lastSeen = lastSeenTimestamps[dept.name] ? new Date(lastSeenTimestamps[dept.name]) : new Date(0);
@@ -143,7 +181,7 @@ export default function App() {
     fetchAll();
     const id = setInterval(fetchAll, 5 * 60 * 1000);
     return () => clearInterval(id);
-  }, [user]);
+  }, [user, isRestrictedRole]); // Cập nhật dependency
 
   const handleLogout = async () => {
     try {
@@ -153,20 +191,28 @@ export default function App() {
     }
   };
 
+  const [mountedTabs, setMountedTabs] = useState(new Set());
+  useEffect(() => {
+    // SỬA LỖI: Không ghi nhận tab 0 vào lúc app đang loading để chống Ghost Mount
+    if (loading || !user) return; 
+
+    setMountedTabs(prev => {
+      if (prev.has(tab)) return prev; // không đổi → không re-render thừa
+      const next = new Set(prev);
+      next.add(tab);
+      return next;
+    });
+  }, [tab, loading, user]); // Cập nhật dependency
+
   if (loading) return <div className="loading-container"><p>{t("common.loading")}</p></div>;
   if (!user) return <Login setUser={setUser} />;
 
-  const tabComponents = [
-    <GembaCheckList newErrorCounts={gembaNotifCounts} setGembaNotifCounts={setGembaNotifCounts} />,
-    <TuGemba newLogCounts={tuGembaNotifCounts} setTuGembaNotifCounts={setTuGembaNotifCounts} />,
-    <Bodam />,
-    <Calamviec />,
-    <HutThuocToilet />,
-    <GiaiLaoChat />,
-    <GiamSatNhaRac />,
-    <BaoCom />
-  ];
-  const ActiveComponent = React.cloneElement(tabComponents[tab], { user, isMobile });
+  // Lazy mount + keep-alive: chỉ mount tab khi user lần đầu vào.
+  // Sau đó ẩn/hiện bằng CSS display — KHÔNG unmount.
+  // mountedTabs là state để trigger re-render khi tab mới được thêm vào.
+
+  const tabStyle = (i) => ({ display: tab === i ? "block" : "none", width: "100%" });
+  const shouldMount = (i) => mountedTabs.has(i);
 
   return (
     <ToastProvider>
@@ -204,6 +250,8 @@ export default function App() {
                 {user?.name} {!isMobile && `(${user?.role})`}
               </span>
 
+              <NotificationBell user={user} setActiveTab={setTab} />
+              <UserSettings user={user} />
               <LanguageSwitcher />
 
               <button
@@ -241,7 +289,22 @@ export default function App() {
           boxSizing: "border-box"
         }}>
           <div style={{ width: "100%" }}>
-            {ActiveComponent}
+            {/* THÊM BỌC ĐIỀU KIỆN CHO TAB 0 VÀ 1 */}
+            {!isRestrictedRole && (
+              <div style={tabStyle(0)}>{shouldMount(0) && <GembaCheckList user={user} isMobile={isMobile} newErrorCounts={gembaNotifCounts} setGembaNotifCounts={setGembaNotifCounts} />}</div>
+            )}
+            {!isRestrictedRole && (
+              <div style={tabStyle(1)}>{shouldMount(1) && <TuGemba user={user} isMobile={isMobile} newLogCounts={tuGembaNotifCounts} setTuGembaNotifCounts={setTuGembaNotifCounts} />}</div>
+            )}
+            
+            {/* CÁC TAB CÒN LẠI GIỮ NGUYÊN */}
+            <div style={tabStyle(2)}>{shouldMount(2) && <Bodam user={user} isMobile={isMobile} />}</div>
+            <div style={tabStyle(3)}>{shouldMount(3) && <Calamviec user={user} isMobile={isMobile} />}</div>
+            <div style={tabStyle(4)}>{shouldMount(4) && <HutThuocToilet user={user} isMobile={isMobile} />}</div>
+            <div style={tabStyle(5)}>{shouldMount(5) && <GiaiLaoChat user={user} isMobile={isMobile} />}</div>
+            <div style={tabStyle(6)}>{shouldMount(6) && <GiamSatNhaRac user={user} isMobile={isMobile} />}</div>
+            <div style={tabStyle(7)}>{shouldMount(7) && <BaoCom user={user} isMobile={isMobile} />}</div>
+            <div style={tabStyle(8)}>{shouldMount(8) && (user?.role === "admin" ? <UserManager user={user} isMobile={isMobile} /> : <div style={{padding:20}}>Access Denied</div>)}</div>
           </div>
         </div>
 

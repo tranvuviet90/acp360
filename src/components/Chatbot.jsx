@@ -2,12 +2,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './Chatbot.css';
 import chatIcon from '../assets/favicon.png'; // <-- 1. Import icon
+import { useI18n } from '../i18n/I18nProvider';
 
 function Chatbot() {
+    const { t } = useI18n();
     // 2. Thêm state để quản lý trạng thái đóng/mở
     const [isOpen, setIsOpen] = useState(false);
 
-    const [messages, setMessages] = useState([{ text: 'Xin chào! Tôi có thể giúp gì cho bạn?', type: 'ai' }]);
+    const [messages, setMessages] = useState([{ text: t("chatbot.welcome"), type: 'ai' }]);
     const [inputValue, setInputValue] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const chatBodyRef = useRef(null);
@@ -47,7 +49,7 @@ function Chatbot() {
             setMessages(prev => [...prev, { text: data.response, type: 'ai' }]);
         } catch (error) {
             console.error('Error:', error);
-            setMessages(prev => [...prev, { text: 'Rất tiếc, đã có lỗi xảy ra. Vui lòng thử lại.', type: 'ai' }]);
+            setMessages(prev => [...prev, { text: t("chatbot.error"), type: 'ai' }]);
         } finally {
             setIsLoading(false);
         }
@@ -64,7 +66,7 @@ function Chatbot() {
             {isOpen && (
                 <div id="chat-widget">
                     <div id="chat-header">
-                        <h2>Trợ lý ảo</h2>
+                        <h2>{t("chatbot.title")}</h2>
                         {/* Thêm nút đóng cửa sổ chat */}
                         <button className="close-btn" onClick={toggleChat}>×</button>
                     </div>
@@ -80,9 +82,9 @@ function Chatbot() {
                             value={inputValue}
                             onChange={(e) => setInputValue(e.target.value)}
                             onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                            placeholder="Nhập câu hỏi..."
+                            placeholder={t("chatbot.placeholder")}
                         />
-                        <button onClick={handleSendMessage}>Gửi</button>
+                        <button onClick={handleSendMessage}>{t("common.send")}</button>
                     </div>
                 </div>
             )}

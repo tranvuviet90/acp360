@@ -4,14 +4,15 @@ import React, { useState, useEffect, useRef } from "react";
 import { db, storage } from "../firebase";
 import {
   doc, onSnapshot, collection, addDoc, serverTimestamp,
-  query, where, orderBy, getDocs, Timestamp, updateDoc, deleteDoc, writeBatch
+  query, where, orderBy, getDocs, Timestamp, updateDoc, deleteDoc, writeBatch, setDoc
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import imageCompression from "browser-image-compression";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { colors } from "../theme";
-import LightboxSwipeOnly from "./LightboxSwipeOnly"; // << IMPORT MỚI
+import LightboxSwipeOnly from "./LightboxSwipeOnly";
+import { useI18n } from "../i18n/I18nProvider";
 
 /* ====================== BIỂU TƯỢNG (ICON) ====================== */
 function ImprovementIcon({ color = 'currentColor', size = 18 }) {
@@ -195,13 +196,19 @@ function ExportModal({ onClose, departments }) {
         if (b64) {
           const imgId = wb.addImage({ base64: b64.split(',')[1], extension: "png" });
           const img = new Image();
-          await new Promise(resolve => { img.onload = resolve; img.src = b64; });
-          const maxWidth = 224, maxHeight = 167;
-          const ratio = Math.min(maxWidth / img.width, maxHeight / img.height);
-          const newWidth = img.width * ratio, newHeight = img.height * ratio;
-          const xOffset = (maxWidth - newWidth) / 2, yOffset = (maxHeight - newHeight) / 2;
-          ws.addImage(imgId, { tl: { col: col - 1 + (xOffset / maxWidth), row: rowIndex - 1 + (yOffset / maxHeight) }, ext: { width: newWidth, height: newHeight } });
-          imageAdded = true;
+          await new Promise(resolve => { 
+            img.onload = resolve; 
+            img.onerror = resolve; // Continue even if image is invalid
+            img.src = b64; 
+          });
+          if (img.width && img.height) {
+            const maxWidth = 224, maxHeight = 167;
+            const ratio = Math.min(maxWidth / img.width, maxHeight / img.height);
+            const newWidth = img.width * ratio, newHeight = img.height * ratio;
+            const xOffset = (maxWidth - newWidth) / 2, yOffset = (maxHeight - newHeight) / 2;
+            ws.addImage(imgId, { tl: { col: col - 1 + (xOffset / maxWidth), row: rowIndex - 1 + (yOffset / maxHeight) }, ext: { width: newWidth, height: newHeight } });
+            imageAdded = true;
+          }
         }
       };
 
@@ -223,10 +230,10 @@ function ExportModal({ onClose, departments }) {
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000 }}>
       <div style={{ background: colors.surface, padding: 22, borderRadius: 12, width: 520, boxShadow: "0 4px 15px rgba(0,0,0,.2)" }}>
-        <h3 style={{ marginTop: 0, color: colors.primary }}>Xuất báo cáo CAP (Tự Gemba)</h3>
+        <h3 style={{ marginTop: 0, color: colors.primary }}>{t("report.export.cap")} (Tự Gemba)</h3>
         <div style={{ display: 'grid', gap: '15px' }}>
           <div>
-            <label style={{ fontWeight: 700, color: colors.textPrimary, display: 'block', marginBottom: 5 }}>Chọn khoảng ngày</label>
+            <label style={{ fontWeight: 700, color: colors.textPrimary, display: 'block', marginBottom: 5 }}>{t("report.export.range")}</label>
             <DatePicker
               selectsRange={true}
               startDate={startDate}
@@ -240,18 +247,18 @@ function ExportModal({ onClose, departments }) {
             />
           </div>
           <div>
-            <label style={{ fontWeight: 700, color: colors.textPrimary, display: 'block', marginBottom: 5 }}>Chọn bộ phận</label>
+            <label style={{ fontWeight: 700, color: colors.textPrimary, display: 'block', marginBottom: 5 }}>{t("report.export.department")}</label>
             <select value={selectedDept} onChange={e => setSelectedDept(e.target.value)} className="date-picker-input">
-              <option value="all">Tất cả bộ phận</option>
+              <option value="all">{t("common.all")}</option>
               {departments.map(dept => <option key={dept.name} value={dept.name}>{dept.name}</option>)}
             </select>
           </div>
         </div>
         <style>{`.date-picker-wrapper{width:100%}.date-picker-input{width:100%;padding:8px;border-radius:6px;border:1px solid ${colors.border};box-sizing:border-box}`}</style>
         <div style={{ display: "flex", gap: 12, marginTop: 20, justifyContent: "flex-end", flexWrap: "wrap" }}>
-          <button onClick={onClose} disabled={isGenerating} style={{ padding: "8px 16px", borderRadius: 6, border: `1px solid ${colors.border}`, background: colors.background, cursor: "pointer" }}>Hủy</button>
+          <button onClick={onClose} disabled={isGenerating} style={{ padding: "8px 16px", borderRadius: 6, border: `1px solid ${colors.border}`, background: colors.background, cursor: "pointer" }}>{t("common.cancel")}</button>
           <button onClick={handleExport} disabled={isGenerating || !startDate || !endDate} style={{ padding: "8px 16px", borderRadius: 6, border: "none", background: "#1f80e0", color: colors.white, fontWeight: 700, cursor: "pointer" }}>
-            {isGenerating ? "Đang xuất..." : "Xuất CAP"}
+            {isGenerating ? t("report.processing") : t("report.export.cap")}
           </button>
         </div>
       </div>
@@ -272,7 +279,7 @@ function ImprovementModal({ modalData, onClose, onSave }) {
   const handleImageChange = async (e) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
-      const opt = { maxSizeMB: 3, maxWidthOrHeight: 1920, useWebWorker: true };
+      const opt = { maxSizeMB: 2, maxWidthOrHeight: 1920, useWebWorker: true };
       try {
         const processed = file.size > opt.maxSizeMB * 1024 * 1024 ? await imageCompression(file, opt) : file;
         setImprovementImageFile(processed);
@@ -303,22 +310,22 @@ function ImprovementModal({ modalData, onClose, onSave }) {
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1001 }}>
       <div style={{ background: colors.surface, padding: 22, borderRadius: 12, width: '90%', maxWidth: 550, boxShadow: "0 4px 15px rgba(0,0,0,.2)" }}>
-        <h3 style={{ marginTop: 0, color: colors.primary, borderBottom: `2px solid ${colors.primaryLight}`, paddingBottom: 10 }}>Cập nhật Cải thiện & Khắc phục</h3>
-        <p><b>Lỗi:</b> {modalData.log.description}</p>
+        <h3 style={{ marginTop: 0, color: colors.primary, borderBottom: `2px solid ${colors.primaryLight}`, paddingBottom: 10 }}>{t("improve.title")}</h3>
+        <p><b>{t("improve.error")}</b> {modalData.log.description}</p>
         <div style={{ display: 'grid', gap: 12 }}>
-          <div> <label style={labelStyle}>Người phụ trách</label> <input type="text" value={responsiblePerson} onChange={e => setResponsiblePerson(e.target.value)} style={inputStyle} /> </div>
-          <div> <label style={labelStyle}>Ngày dự kiến hoàn thành</label> <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={inputStyle} /> </div>
-          <div> <label style={labelStyle}>Ghi chú tiến độ</label> <textarea value={progressNotes} onChange={e => setProgressNotes(e.target.value)} style={{...inputStyle, minHeight: 70}} /> </div>
-          <div> <label style={labelStyle}>Ngày hoàn thành</label> <input type="date" value={completionDate} onChange={e => setCompletionDate(e.target.value)} style={inputStyle} /> </div>
+          <div> <label style={labelStyle}>{t("improve.responsible")}</label> <input type="text" value={responsiblePerson} onChange={e => setResponsiblePerson(e.target.value)} style={inputStyle} /> </div>
+          <div> <label style={labelStyle}>{t("improve.dueDate")}</label> <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={inputStyle} /> </div>
+          <div> <label style={labelStyle}>{t("improve.notes")}</label> <textarea value={progressNotes} onChange={e => setProgressNotes(e.target.value)} style={{...inputStyle, minHeight: 70}} /> </div>
+          <div> <label style={labelStyle}>{t("improve.doneDate")}</label> <input type="date" value={completionDate} onChange={e => setCompletionDate(e.target.value)} style={inputStyle} /> </div>
           <div>
-            <label style={labelStyle}>Ảnh cải thiện</label>
+            <label style={labelStyle}>{t("improve.images")}</label>
             <input type="file" accept="image/*" onChange={handleImageChange} style={{...inputStyle, padding: 5}} />
-            {modalData.log.improvementImageUrl && !improvementImageFile && <a href={modalData.log.improvementImageUrl} target="_blank" rel="noopener noreferrer" style={{fontSize: 12}}>Xem ảnh đã tải lên</a>}
+            {modalData.log.improvementImageUrl && !improvementImageFile && <a href={modalData.log.improvementImageUrl} target="_blank" rel="noopener noreferrer" style={{fontSize: 12}}>{t("improve.viewImage")}</a>}
           </div>
         </div>
         <div style={{ display: "flex", gap: 12, marginTop: 20, justifyContent: "flex-end" }}>
-          <button onClick={onClose} disabled={isSaving} style={{ padding: "8px 16px", borderRadius: 6, border: `1px solid ${colors.border}`, background: colors.background, cursor: "pointer" }}>Hủy</button>
-          <button onClick={handleSave} disabled={isSaving} style={{ padding: "8px 16px", borderRadius: 6, border: "none", background: colors.primary, color: colors.white, fontWeight: 700, cursor: "pointer" }}> {isSaving ? "Đang lưu..." : "Lưu thay đổi"} </button>
+          <button onClick={onClose} disabled={isSaving} style={{ padding: "8px 16px", borderRadius: 6, border: `1px solid ${colors.border}`, background: colors.background, cursor: "pointer" }}>{t("common.cancel")}</button>
+          <button onClick={handleSave} disabled={isSaving} style={{ padding: "8px 16px", borderRadius: 6, border: "none", background: colors.primary, color: colors.white, fontWeight: 700, cursor: "pointer" }}> {isSaving ? t("improve.saving") : t("improve.save")} </button>
         </div>
       </div>
     </div>
@@ -330,6 +337,7 @@ function ImprovementModal({ modalData, onClose, onSave }) {
    Component chính Tự Gemba
    ========================= */
 function TuGemba({ user, isMobile, newLogCounts, setTuGembaNotifCounts }) {
+  const { t } = useI18n();
   const [depIndex, setDepIndex] = useState(0);
   const [selectedGroup, setSelectedGroup] = useState("");
   const [selectedError, setSelectedError] = useState("");
@@ -370,13 +378,13 @@ function TuGemba({ user, isMobile, newLogCounts, setTuGembaNotifCounts }) {
     const run = async () => {
       const urls = (logs || []).flatMap(e => e.imageUrls || (e.imageUrl ? [e.imageUrl] : [])).filter(Boolean);
       const tasks = urls.filter(u => !thumbMap[u]).map(async (u) => {
-        const t = await makeThumbDataURL(u, 96, 96, 0.55);
-        return [u, t];
+        const thumb = await makeThumbDataURL(u, 96, 96, 0.55);
+        return [u, thumb];
       });
       if (tasks.length) {
         const pairs = await Promise.all(tasks);
         const next = { ...thumbMap };
-        pairs.forEach(([u, t]) => { next[u] = t; });
+        pairs.forEach(([u, thumb]) => { next[u] = thumb; });
         setThumbMap(next);
       }
     };
@@ -395,7 +403,7 @@ function TuGemba({ user, isMobile, newLogCounts, setTuGembaNotifCounts }) {
         if (fileRef.current) fileRef.current.value = "";
         return;
       }
-      const opt = { maxSizeMB: 3, maxWidthOrHeight: 1920, useWebWorker: true };
+      const opt = { maxSizeMB: 2, maxWidthOrHeight: 1920, useWebWorker: true };
       try {
         const processedFiles = await Promise.all(files.map(file => 
           file.size > opt.maxSizeMB * 1024 * 1024 ? imageCompression(file, opt) : file
@@ -460,6 +468,19 @@ function TuGemba({ user, isMobile, newLogCounts, setTuGembaNotifCounts }) {
     };
     await addDoc(collection(db, "tu_gemba_logs"), logData);
     
+    try {
+      await addDoc(collection(db, "notifications"), {
+        type: "new_tu_gemba_error",
+        message: `${user.name} đã thêm lỗi mới tại ${dep.name} (Tự Gemba): ${selectedError || note}`,
+        targetRoles: ["ehs", "admin", "ehs committee"],
+        createdBy: user.uid,
+        readBy: [],
+        timestamp: serverTimestamp()
+      });
+    } catch (e) {
+      console.error("Lỗi gửi thông báo:", e);
+    }
+    
     setSelectedGroup(""); 
     setSelectedError(""); 
     setImageFiles([]);
@@ -500,10 +521,16 @@ function TuGemba({ user, isMobile, newLogCounts, setTuGembaNotifCounts }) {
 
     if (newLogCounts && newLogCounts[departmentName] > 0) {
       try {
-        const timestamps = JSON.parse(localStorage.getItem("tuGembaLastSeenTimestamps") || "{}");
-        timestamps[departmentName] = new Date().toISOString();
-        localStorage.setItem("tuGembaLastSeenTimestamps", JSON.stringify(timestamps));
-        
+        const now = new Date().toISOString();
+        const storageKey = "tuGembaLastSeenTimestamps";
+        const timestamps = JSON.parse(localStorage.getItem(storageKey) || "{}");
+        timestamps[departmentName] = now;
+        localStorage.setItem(storageKey, JSON.stringify(timestamps));
+        // Đồng bộ lên Firestore để cross-device
+        if (user && user.uid) {
+          const prefRef = doc(db, "user_prefs", user.uid);
+          setDoc(prefRef, { [storageKey]: timestamps }, { merge: true }).catch(e => console.warn("Lưu prefs lỗi:", e));
+        }
         const updatedCounts = { ...newLogCounts, [departmentName]: 0 };
         setTuGembaNotifCounts(updatedCounts);
         
@@ -545,47 +572,47 @@ function TuGemba({ user, isMobile, newLogCounts, setTuGembaNotifCounts }) {
         <div style={{ display: "flex", flexDirection: isMobile ? 'column' : 'row', alignItems: "flex-start", gap: 32, width: "100%" }}>
           <div style={{ flex: "1 1 auto", minWidth: 270, order: isMobile ? 2 : 1 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap" }}>
-              <h2 style={{ color: colors.primary, marginTop: 0 }}>Ghi nhận Tự Gemba: {dep.name}</h2>
-              <button onClick={() => setShowExportModal(true)} style={{ background: "#1f80e0", color: colors.white, border: "none", padding: "8px 15px", borderRadius: 6, fontWeight: "bold", cursor: "pointer", marginTop: isMobile ? 10 : 0 }}> Xuất báo cáo CAP </button>
+              <h2 style={{ color: colors.primary, marginTop: 0 }}>Tự Gemba: {dep.name}</h2>
+              <button onClick={() => setShowExportModal(true)} style={{ background: "#1f80e0", color: colors.white, border: "none", padding: "8px 15px", borderRadius: 6, fontWeight: "bold", cursor: "pointer", marginTop: isMobile ? 10 : 0 }}> {t("report.export.cap")} </button>
             </div>
             
             <div style={{ marginBottom: 15 }}>
-                <div style={{ fontSize: 15, color: colors.textPrimary, marginBottom: 5 }}>Chọn nhóm lỗi (tùy chọn):</div>
+                <div style={{ fontSize: 15, color: colors.textPrimary, marginBottom: 5 }}>{t("gemba.group.label")}</div>
                 <select value={selectedGroup} onChange={(e) => { setSelectedGroup(e.target.value); setSelectedError(""); }} style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: `1.5px solid ${colors.primaryLight}`, fontSize: 15 }}>
-                <option value="">-- Chọn nhóm lỗi --</option>
+                <option value="">{t("gemba.group.placeholder")}</option>
                 {errorGroups.map((g) => <option key={g.group} value={g.group}>{g.group}</option>)}
                 </select>
             </div>
             {selectedGroup && (
                 <div style={{ marginBottom: 15 }}>
-                    <div style={{ fontSize: 15, color: colors.textPrimary, marginBottom: 5 }}>Chọn lỗi cụ thể:</div>
+                    <div style={{ fontSize: 15, color: colors.textPrimary, marginBottom: 5 }}>{t("gemba.error.label")}</div>
                     <select value={selectedError} onChange={(e) => setSelectedError(e.target.value)} style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: `1.5px solid ${colors.primaryLight}`, fontSize: 15 }}>
-                    <option value="">-- Chọn lỗi --</option>
+                    <option value="">{t("gemba.error.placeholder")}</option>
                     {(errorGroups.find(g => g.group === selectedGroup)?.items || []).map(e => <option key={e.code} value={e.desc}>{e.desc}</option> )}
                     </select>
                 </div>
             )}
             <div style={{ marginBottom: 15 }}>
-                 <div style={{ fontSize: 15, color: colors.textPrimary, marginBottom: 5 }}>Ghi chú / Mô tả lỗi:</div>
-                <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Nhập mô tả chi tiết cho lỗi tại đây..." style={{ width: "100%", minHeight: 60, boxSizing: "border-box", padding: "8px 12px", borderRadius: 8, border: `1.5px solid ${colors.primaryLight}`, fontSize: 15, fontFamily: "sans-serif" }} />
+                 <div style={{ fontSize: 15, color: colors.textPrimary, marginBottom: 5 }}>{t("gemba.note.label")}</div>
+                <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("gemba.note.custom.placeholder")} style={{ width: "100%", minHeight: 60, boxSizing: "border-box", padding: "8px 12px", borderRadius: 8, border: `1.5px solid ${colors.primaryLight}`, fontSize: 15, fontFamily: "sans-serif" }} />
             </div>
             
             <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 24, flexWrap: "wrap" }}>
                 <input id="imageUploadTuGemba" type="file" accept="image/*" onChange={handleImageChange} ref={fileRef} style={{ display: 'none' }} multiple />
                 <label htmlFor="imageUploadTuGemba" style={{background: 'white', color: colors.primary, border: `1.2px solid ${colors.primaryLight}`, borderRadius: 8, padding: '8px 15px', cursor: 'pointer', fontWeight: 600}}>
-                    Ảnh đính kèm ({imageFiles.length}/5)
+                    {t("gemba.attach", {count: imageFiles.length}).replace("{count}", imageFiles.length)}
                 </label>
                 <span style={{fontStyle: 'italic', fontSize: 14, color: '#555', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
-                    {imageFileNames.length > 0 ? imageFileNames.join(', ') : "Chưa có ảnh"}
+                    {imageFileNames.length > 0 ? imageFileNames.join(', ') : t("common.noImage")}
                 </span>
                 <button onClick={handleAddLog} disabled={isUploading} style={{ marginLeft: 'auto', height: 38, background: colors.primary, color: colors.white, borderRadius: 9, border: "none", padding: "0 26px", fontWeight: 700, fontSize: 16, cursor: "pointer", opacity: isUploading ? 0.6 : 1 }}>
-                     {isUploading ? "Đang tải..." : "Thêm"}
+                     {isUploading ? t("gemba.uploading") : t("gemba.add")}
                 </button>
             </div>
 
             <hr style={{border: 'none', borderTop: `1px solid ${colors.primaryLight}`, margin: '30px 0'}} />
             
-            {loading ? <div>Đang tải dữ liệu...</div> : (
+            {loading ? <div>{t("gemba.loading")}</div> : (
               isMobile ? (
                 <div style={{ display: 'grid', gap: 12 }}>
                   {logs.length > 0 ? logs.map((log) => {
@@ -599,7 +626,7 @@ function TuGemba({ user, isMobile, newLogCounts, setTuGembaNotifCounts }) {
                         </div>
                         <div style={{ marginTop: 6, overflowWrap:'anywhere' }}>
                           {log.description}
-                          {log.addedBy && <div style={{fontSize: 11, color: colors.textSecondary, fontStyle:'italic'}}>Bởi: {log.addedBy}</div>}
+                          {log.addedBy && <div style={{fontSize: 11, color: colors.textSecondary, fontStyle:'italic'}}>{t("gemba.by")} {log.addedBy}</div>}
                         </div>
                         {images.length > 0 && (
                           <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -618,28 +645,28 @@ function TuGemba({ user, isMobile, newLogCounts, setTuGembaNotifCounts }) {
                             {log.note && <button onClick={() => alert(`Ghi chú:\n\n${log.note}`)} style={{ border:'none', background:'transparent', fontSize:22, cursor:'pointer' }} title="Xem ghi chú">🗒️</button>}
                           </div>
                           <div style={{ display:'flex', alignItems:'center' }}>
-                            <ActionButton onClick={() => setImprovementModal({ isOpen: true, log: log })} title="Cải thiện/Khắc phục" color={colors.white} bg={isImproved ? '#4caf50' : '#f44336'}><ImprovementIcon /></ActionButton>
+                            <ActionButton onClick={() => setImprovementModal({ isOpen: true, log: log })} title={t("gemba.improve.action")} color={colors.white} bg={isImproved ? '#4caf50' : '#f44336'}><ImprovementIcon /></ActionButton>
                             {(userRole === 'admin' || userRole === 'ehs') && (
-                              <ActionButton onClick={() => handleDelete(log.id)} title="Xóa lỗi" color="#d32f2f" bg="transparent">x</ActionButton>
+                              <ActionButton onClick={() => handleDelete(log.id)} title={t("gemba.delete.action")} color="#d32f2f" bg="transparent">x</ActionButton>
                             )}
                           </div>
                         </div>
                       </div>
                     );
                   }) : (
-                    <div style={{textAlign:'center', padding:20}}>Không có lỗi nào được ghi nhận.</div>
+                    <div style={{textAlign:'center', padding:20}}>{t("gemba.empty")}</div>
                   )}
                 </div>
               ) : (
     <table style={{ marginTop: 10, width: "100%", borderCollapse: "separate", borderSpacing: 0, boxShadow: "0 1.5px 10px #E88E2E11", border: `1.2px solid ${colors.primaryLight}`, background: colors.surface, borderRadius: 12, overflow: "hidden" }}>
                   <thead>
                     <tr style={{ background: colors.primaryLight }}>
-                        <th style={{ padding: "10px 14px", color: colors.textPrimary }}>Thời gian</th>
-                        <th style={{ padding: "10px 14px", color: colors.textPrimary }}>Nhóm lỗi</th>
-                        <th style={{ padding: "10px 14px", color: colors.textPrimary, width: "45%" }}>Mô tả</th>
-                        <th style={{ padding: "10px 8px", color: colors.textPrimary }}>Ảnh</th>
-                        <th style={{ padding: "10px 8px", color: colors.textPrimary }}>Ghi chú</th>
-                        <th style={{ padding: "10px 8px", color: colors.textPrimary, minWidth: 100 }}>Hành động</th>
+                        <th style={{ padding: "10px 14px", color: colors.textPrimary }}>{t("gemba.table.time")}</th>
+                        <th style={{ padding: "10px 14px", color: colors.textPrimary }}>{t("gemba.table.group")}</th>
+                        <th style={{ padding: "10px 14px", color: colors.textPrimary, width: "45%" }}>{t("gemba.table.desc")}</th>
+                        <th style={{ padding: "10px 8px", color: colors.textPrimary }}>{t("gemba.table.photo")}</th>
+                        <th style={{ padding: "10px 8px", color: colors.textPrimary }}>{t("gemba.table.note")}</th>
+                        <th style={{ padding: "10px 8px", color: colors.textPrimary, minWidth: 100 }}>{t("gemba.table.action")}</th>
                     </tr>
                   </thead>
                   <tbody key={dep.name}>
@@ -650,7 +677,7 @@ function TuGemba({ user, isMobile, newLogCounts, setTuGembaNotifCounts }) {
                       <tr key={log.id}>
                       <td style={{ fontSize: 12, padding: "10px 14px" }}>{safeTsToDate(log.timestamp)?.toLocaleString("vi-VN")}</td>
                       <td style={{ padding: "10px 14px" }}>{log.group}</td>
-                      <td style={{ padding: "10px 14px" }}>{log.description} {log.addedBy && <div style={{fontSize: '11px', color: colors.textSecondary, fontStyle: 'italic'}}>Bởi: {log.addedBy}</div>}</td>
+                      <td style={{ padding: "10px 14px" }}>{log.description} {log.addedBy && <div style={{fontSize: '11px', color: colors.textSecondary, fontStyle: 'italic'}}>{t("gemba.by")} {log.addedBy}</div>}</td>
                       <td style={{ textAlign: "center", padding: "10px 8px" }}>
                         {images.length > 0 && (
                           <div style={{ position: 'relative', display: 'inline-block', cursor: 'pointer' }} onClick={() => openViewer(images, 0)}>
@@ -666,12 +693,12 @@ function TuGemba({ user, isMobile, newLogCounts, setTuGembaNotifCounts }) {
                       <td style={{ textAlign: "center", padding: "10px 8px" }}>{log.note && <button onClick={() => alert(`Ghi chú:\n\n${log.note}`)} style={{ border: "none", background: "transparent", fontSize: 24, cursor: "pointer" }} title="Xem ghi chú">🗒️</button>}</td>
                       <td style={{ textAlign: "center", padding: "10px 8px" }}>
                         <div style={{display: 'flex', justifyContent: 'center', alignItems: 'center'}}>
-                          <ActionButton onClick={() => setImprovementModal({ isOpen: true, log: log })} title="Cải thiện/Khắc phục" color={colors.white} bg={isImproved ? "#4caf50" : "#f44336"}> <ImprovementIcon /> </ActionButton>
-                          {(userRole === "admin" || userRole === "ehs") && ( <ActionButton onClick={() => handleDelete(log.id)} title="Xóa lỗi" color="#d32f2f" bg="transparent">x</ActionButton> )}
+                          <ActionButton onClick={() => setImprovementModal({ isOpen: true, log: log })} title={t("gemba.improve.action")} color={colors.white} bg={isImproved ? "#4caf50" : "#f44336"}> <ImprovementIcon /> </ActionButton>
+                          {(userRole === "admin" || userRole === "ehs") && ( <ActionButton onClick={() => handleDelete(log.id)} title={t("gemba.delete.action")} color="#d32f2f" bg="transparent">x</ActionButton> )}
                         </div>
                       </td>
                       </tr>
-                  )}) : ( <tr><td colSpan="6" style={{textAlign: 'center', padding: '20px'}}>Không có lỗi nào được ghi nhận.</td></tr> )}
+                  )}) : ( <tr><td colSpan="6" style={{textAlign: 'center', padding: '20px'}}>{t("gemba.empty")}</td></tr> )}
                   </tbody>
               </table>
               ))}

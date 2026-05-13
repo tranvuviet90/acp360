@@ -1,7 +1,11 @@
 // functions/index.js
-const { onRequest } = require("firebase-functions/v2/https");
+const { onRequest, onCall, HttpsError } = require("firebase-functions/v2/https");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const logger = require("firebase-functions/logger");
+const admin = require("firebase-admin");
+
+admin.initializeApp();
+const db = admin.firestore();
 
 const GOOGLE_API_KEY = process.env.GOOGLE_APIKEY;
 
@@ -129,7 +133,7 @@ Kết thúc.
 // ===================================================================
 
 const model = genAI.getGenerativeModel({
-  model: "gemini-1.5-flash",
+  model: "gemini-2.5-flash",
   systemInstruction: systemInstruction,
 });
 
@@ -172,6 +176,168 @@ exports.askAI = onRequest(
     } catch (error) {
       logger.error("Error details:", error);
       res.status(500).json({ error: "Failed to get response from AI" });
+    }
+  }
+);
+
+// ===================================================================
+// ### ADMIN USER MANAGEMENT & ROLE REQUESTS ###
+// ===================================================================
+
+async function verifyAdmin(request) {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Bạn phải đăng nhập để thực hiện hành động này.");
+  }
+  const uid = request.auth.uid;
+  const userDoc = await db.collection("users").doc(uid).get();
+  if (!userDoc.exists || userDoc.data().role !== "admin") {
+    throw new HttpsError("permission-denied", "Bạn không có quyền thực hiện hành động này.");
+  }
+}
+
+exports.listUsers = onCall(
+  { region: "asia-southeast1", cors: true },
+  async (request) => {
+    await verifyAdmin(request);
+    
+    try {
+      const listUsersResult = await admin.auth().listUsers(1000);
+      const authUsers = listUsersResult.users;
+      
+      const usersSnap = await db.collection("users").get();
+      const firestoreUsers = {};
+      usersSnap.forEach(doc => {
+        firestoreUsers[doc.id] = doc.data();
+      });
+      
+      const users = authUsers.map(u => ({
+        uid: u.uid,
+        email: u.email,
+        name: firestoreUsers[u.uid]?.name || "Unknown",
+        role: firestoreUsers[u.uid]?.role || "Unknown",
+        disabled: u.disabled,
+        createdAt: u.metadata.creationTime,
+        lastSignInTime: u.metadata.lastSignInTime
+      }));
+      
+      return { users };
+    } catch (error) {
+      logger.error("Error listing users:", error);
+      throw new HttpsError("internal", "Không thể lấy danh sách người dùng.");
+    }
+  }
+);
+
+exports.adminUserAction = onCall(
+  { region: "asia-southeast1", cors: true },
+  async (request) => {
+    await verifyAdmin(request);
+    const { action, targetUid, data } = request.data;
+    
+    if (!targetUid && action !== "createUser") {
+      throw new HttpsError("invalid-argument", "Thiếu UID người dùng.");
+    }
+    
+    try {
+      switch (action) {
+        case "createUser":
+          if (!data || !data.email || !data.password || !data.role) {
+            throw new HttpsError("invalid-argument", "Thiếu thông tin tạo tài khoản.");
+          }
+          const newAuthUser = await admin.auth().createUser({
+            email: data.email,
+            password: data.password,
+            displayName: data.name || data.email.split('@')[0],
+          });
+          await db.collection("users").doc(newAuthUser.uid).set({
+            email: data.email,
+            name: data.name || data.email.split('@')[0],
+            role: data.role,
+            disabled: false,
+          });
+          break;
+        case "resetPassword":
+          if (!data || !data.newPassword) throw new HttpsError("invalid-argument", "Thiếu mật khẩu mới.");
+          await admin.auth().updateUser(targetUid, { password: data.newPassword });
+          break;
+        case "changeRole":
+          if (!data || !data.newRole) throw new HttpsError("invalid-argument", "Thiếu quyền mới.");
+          await db.collection("users").doc(targetUid).update({ role: data.newRole });
+          break;
+        case "disable":
+          await admin.auth().updateUser(targetUid, { disabled: true });
+          break;
+        case "enable":
+          await admin.auth().updateUser(targetUid, { disabled: false });
+          break;
+        case "delete":
+          await admin.auth().deleteUser(targetUid);
+          await db.collection("users").doc(targetUid).delete();
+          break;
+        case "approveRoleRequest":
+          if (!data || !data.requestId || !data.newRole) throw new HttpsError("invalid-argument", "Thiếu thông tin yêu cầu.");
+          await db.collection("users").doc(targetUid).update({ role: data.newRole });
+          await db.collection("role_requests").doc(data.requestId).update({ status: "approved" });
+          await db.collection("notifications").add({
+            type: "role_response",
+            message: `Yêu cầu đổi quyền thành "${data.newRole}" của bạn đã được chấp nhận.`,
+            targetUserId: targetUid,
+            readBy: [],
+            timestamp: admin.firestore.FieldValue.serverTimestamp()
+          });
+          break;
+        case "rejectRoleRequest":
+          if (!data || !data.requestId) throw new HttpsError("invalid-argument", "Thiếu ID yêu cầu.");
+          await db.collection("role_requests").doc(data.requestId).update({ status: "rejected" });
+          await db.collection("notifications").add({
+            type: "role_response",
+            message: `Yêu cầu đổi quyền của bạn đã bị từ chối.`,
+            targetUserId: targetUid,
+            readBy: [],
+            timestamp: admin.firestore.FieldValue.serverTimestamp()
+          });
+          break;
+        default:
+          throw new HttpsError("invalid-argument", "Hành động không hợp lệ.");
+      }
+      return { success: true };
+    } catch (error) {
+      logger.error("Admin user action error:", error);
+      throw new HttpsError("internal", error.message || "Lỗi khi thực hiện hành động.");
+    }
+  }
+);
+
+exports.submitRoleRequest = onCall(
+  { region: "asia-southeast1", cors: true },
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Bạn phải đăng nhập.");
+    const uid = request.auth.uid;
+    const { requestedRole, currentRole, name, email } = request.data;
+    
+    if (!requestedRole) throw new HttpsError("invalid-argument", "Thiếu role yêu cầu.");
+    
+    try {
+      await db.collection("role_requests").add({
+        uid,
+        name,
+        email,
+        currentRole,
+        requestedRole,
+        status: "pending",
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      });
+      await db.collection("notifications").add({
+        type: "role_request",
+        message: `${name} vừa yêu cầu đổi quyền từ "${currentRole || 'Chưa có'}" sang "${requestedRole}".`,
+        targetRoles: ["admin"],
+        readBy: [],
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      });
+      return { success: true };
+    } catch (error) {
+      logger.error("Submit role request error:", error);
+      throw new HttpsError("internal", "Không thể gửi yêu cầu.");
     }
   }
 );

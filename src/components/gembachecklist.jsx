@@ -13,6 +13,8 @@ import imageCompression from "browser-image-compression";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { colors } from "../theme";
+import { useI18n } from "../i18n/I18nProvider";
+import LightboxSwipeOnly from "./LightboxSwipeOnly";
 
 /* ====================== BIỂU TƯỢNG (ICON) ====================== */
 function ImprovementIcon({ color = 'currentColor', size = 18 }) {
@@ -51,7 +53,7 @@ const errorGroups = [
   { group: "Nguyên vật liệu", items: [ { code: "10.1", desc: "Chất cao >1m5 không quấn PE", point: 4 }, { code: "10.2", desc: "Nguyên liệu không để trên pallet", point: 2 }, { code: "10.3", desc: "Khiêng vật liệu nặng 1 người", point: 4 }, { code: "10.4", desc: "Thùng móp bể không thay/ chất lẫn kích thước", point: 4 }, { code: "10.5", desc: "Không có dây đai chống ngã nguyên liệu", point: 4 }, { code: "10.6", desc: "Chất hàng không đúng quy định/không gọn", point: 2 }, { code: "10.7", desc: "Di chuyển VL không dùng dây đai cố định", point: 4 }, { code: "10.8", desc: "Không cố định cuộn nguyên liệu", point: 4 }, ] },
   { group: "Hành vi không an toàn", items: [ { code: "11.1", desc: "Cố ý làm hư máy móc thiết bị", point: 6 }, { code: "11.2", desc: "Cố ý làm hư phương tiện PCCC", point: 6 }, { code: "11.3", desc: "Leo cao không dùng dây đai", point: 6 }, { code: "11.4", desc: "Dụng cụ tự chế nguy hiểm", point: 4 }, { code: "11.5", desc: "Mang bật lửa/thuốc lá nơi dễ cháy", point: 6 }, { code: "11.6", desc: "Hút thuốc khu vực cấm", point: 6 }, { code: "11.7", desc: "Cố ý làm mất chức năng an toàn", point: 6 }, { code: "11.8", desc: "Tự ý đổi thao tác/quy trình/kết cấu", point: 6 }, { code: "11.9", desc: "Đưa tay vào thiết bị chuyển động", point: 6 }, { code: "11.10", desc: "Dùng ĐT cá nhân/đeo tai phone khi làm", point: 4 }, { code: "11.11", desc: "Không cuộn gọn tóc vào nón khi vận hành", point: 4 }, { code: "11.12", desc: "Phát hiện hư không báo sửa", point: 4 }, { code: "11.13", desc: "Tự ý tháo cover/che chắn sensor", point: 6 }, { code: "11.14", desc: "Không hướng dẫn NV mới theo AT", point: 6 }, { code: "11.15", desc: "Không hướng dẫn giám sát AT nhà thầu", point: 6 }, { code: "11.16", desc: "Lưu trữ vật nguy hiểm ở tủ cá nhân", point: 6 }, { code: "11.17", desc: "Vứt rác/khạc nhổ bừa bãi", point: 4 }, ] },
   { group: "Thái độ hợp tác", items: [ { code: "12.1", desc: "Không hợp tác xử lý an toàn", point: 6 }, { code: "12.2", desc: "Thái độ đe dọa", point: 6 }, { code: "12.3", desc: "Đánh người", point: 6 }, { code: "12.4", desc: "QL không xử lý vi phạm của nhân viên", point: 6 }, ] },
-  { group: "Khác", items: [ { code: "13.1", desc: "Không có DS NV khu vực nghiêm ngặt", point: 4 }, { code: "13.2", desc: "Không tuân thủ các quy định an toàn", point: 6 }, { code: "13.3", desc: "Đồng phục không đúng quy định", point: 4 }, { code: "13.4", desc: "Thức ăn/ nước uống ở khu vực làm việc", point: 2 }, { code: "13.5", desc: "Tai nạn lao động", point: 40 }, ] },
+  // Lỗi Khác: dành cho các lỗi không thuộc nhóm nào, desc cố định là "Lỗi khác", chi tiết ghi trong note
   { group: "Lỗi Khác", items: []},
 ];
 
@@ -168,13 +170,19 @@ function ExportModal({ onClose, departments }) {
         if (b64) {
           const imgId = wb.addImage({ base64: b64.split(',')[1], extension: "png" });
           const img = new Image();
-          await new Promise(resolve => { img.onload = resolve; img.src = b64; });
-          const maxWidth = 224, maxHeight = 167;
-          const ratio = Math.min(maxWidth / img.width, maxHeight / img.height);
-          const newWidth = img.width * ratio, newHeight = img.height * ratio;
-          const xOffset = (maxWidth - newWidth) / 2, yOffset = (maxHeight - newHeight) / 2;
-          ws.addImage(imgId, { tl: { col: col - 1 + (xOffset / maxWidth), row: rowIndex - 1 + (yOffset / maxHeight) }, ext: { width: newWidth, height: newHeight } });
-          imageAdded = true;
+          await new Promise(resolve => { 
+            img.onload = resolve; 
+            img.onerror = resolve; // Continue even if image is invalid
+            img.src = b64; 
+          });
+          if (img.width && img.height) {
+            const maxWidth = 224, maxHeight = 167;
+            const ratio = Math.min(maxWidth / img.width, maxHeight / img.height);
+            const newWidth = img.width * ratio, newHeight = img.height * ratio;
+            const xOffset = (maxWidth - newWidth) / 2, yOffset = (maxHeight - newHeight) / 2;
+            ws.addImage(imgId, { tl: { col: col - 1 + (xOffset / maxWidth), row: rowIndex - 1 + (yOffset / maxHeight) }, ext: { width: newWidth, height: newHeight } });
+            imageAdded = true;
+          }
         }
       };
 
@@ -200,11 +208,36 @@ function ExportModal({ onClose, departments }) {
     const buf = await resp.arrayBuffer();
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buf);
-    const errorRowMap = {};
-    let currentRow = 5;
-    errorGroups.forEach(group => { group.items.forEach(item => { if (item.code !== 'custom' && currentRow <= 39) errorRowMap[item.code] = currentRow++; }); });
+
+    // Layout cố định của template: mỗi nhóm có startRow và số dòng mặc định
+    // Khi vi phạm > defaultRows thì chèn thêm dòng và đẩy các nhóm dưới xuống
+    const groupLayout = [
+      { group: "Bảo hộ lao động (PPE)", startRow: 5,  defaultRows: 4 },
+      { group: "5S",                     startRow: 9,  defaultRows: 3 },
+      { group: "Hệ thống điện",          startRow: 12, defaultRows: 3 },
+      { group: "Dụng cụ",                startRow: 15, defaultRows: 3 },
+      { group: "Hóa chất",               startRow: 18, defaultRows: 3 },
+      { group: "Biển cảnh báo",          startRow: 21, defaultRows: 3 },
+      { group: "Phân loại rác",          startRow: 24, defaultRows: 3 },
+      { group: "Phòng cháy chữa cháy",   startRow: 27, defaultRows: 3 },
+      { group: "Máy móc",                startRow: 30, defaultRows: 3 },
+      { group: "Nguyên vật liệu",        startRow: 33, defaultRows: 2 },
+      { group: "Hành vi không an toàn",  startRow: 35, defaultRows: 3 },
+      { group: "Thái độ hợp tác",        startRow: 38, defaultRows: 1 },
+      // Dòng 39: gộp cả "Khác" và "Lỗi Khác" (custom errors) vào chung
+      { group: "__KHAC__",               startRow: 39, defaultRows: 1 },
+    ];
+    // Dòng 40 là dòng tính toán (C40=100 cố định, D-F40 gộp "Tổng điểm trừ")
+    // Chúng ta chỉ ghi G40=SUM, G41=100-G40, không đụng C40/D40/E40/F40
+    const ORIGINAL_TOTAL_ROW = 40;
+
+    // Gom dữ liệu theo bộ phận
     const byDeptWithErrors = new Map();
-    rows.forEach(r => { if (!byDeptWithErrors.has(r.department)) byDeptWithErrors.set(r.department, []); byDeptWithErrors.get(r.department).push(r); });
+    rows.forEach(r => {
+      if (!byDeptWithErrors.has(r.department)) byDeptWithErrors.set(r.department, []);
+      byDeptWithErrors.get(r.department).push(r);
+    });
+
     for (const dept of departments) {
       const depName = dept.name;
       const ws = wb.getWorksheet(depName);
@@ -215,35 +248,80 @@ function ExportModal({ onClose, departments }) {
       ws.getCell('C3').value = depName;
       ws.getCell('E3').value = peopleCount;
       ws.getCell('G3').value = heSo;
-      const deptRows = byDeptWithErrors.get(depName);
-      if (deptRows && deptRows.length > 0) {
-        const errorsByCode = new Map();
-        deptRows.forEach(r => {
-          if (!r.code || r.code.startsWith('custom')) return;
-          if (!errorsByCode.has(r.code)) errorsByCode.set(r.code, { count: 0, desc: r.desc, basePoint: r.basePoint, adjusted: r.adjusted, notes: [], });
-          const errorData = errorsByCode.get(r.code);
-          errorData.count += 1;
-          if (r.note) errorData.notes.push(r.note);
-        });
-        errorsByCode.forEach((data, code) => {
-          const rowIndex = errorRowMap[code];
-          if (rowIndex) {
-            ws.getCell(`C${rowIndex}`).value = data.count;
-            ws.getCell(`D${rowIndex}`).value = data.desc;
-            ws.getCell(`E${rowIndex}`).value = data.basePoint;
-            ws.getCell(`F${rowIndex}`).value = data.adjusted;
-            ws.getCell(`G${rowIndex}`).value = { formula: `C${rowIndex}*F${rowIndex}` };
-            ws.getCell(`H${rowIndex}`).value = data.notes.join('\n');
-            ws.getCell(`H${rowIndex}`).alignment = { wrapText: true, vertical: 'top' };
+
+      const deptRows = byDeptWithErrors.get(depName) || [];
+
+      // Gom vi phạm theo nhóm, rồi trong nhóm gom theo code
+      const violationsByGroup = new Map();
+      deptRows.forEach(r => {
+        const grp = r.group || "Khác";
+        if (!violationsByGroup.has(grp)) violationsByGroup.set(grp, new Map());
+        const codeMap = violationsByGroup.get(grp);
+        const key = r.code || `custom-${r.desc}`;
+        if (!codeMap.has(key)) {
+          codeMap.set(key, { count: 0, desc: r.desc, basePoint: r.basePoint, adjusted: r.adjusted, notes: [] });
+        }
+        const entry = codeMap.get(key);
+        entry.count += 1;
+        entry.adjusted = r.adjusted; // lấy giá trị mới nhất
+        if (r.note) entry.notes.push(r.note);
+      });
+
+      // Chuyển thành danh sách theo nhóm
+      const violationsListByGroup = new Map();
+      violationsByGroup.forEach((codeMap, grp) => {
+        violationsListByGroup.set(grp, Array.from(codeMap.values()));
+      });
+      // Gộp "Khác" và "Lỗi Khác" (custom errors) vào __KHAC__
+      const khacList = [
+        ...(violationsListByGroup.get("Khác") || []),
+        ...(violationsListByGroup.get("Lỗi Khác") || []),
+      ];
+      if (khacList.length > 0) violationsListByGroup.set("__KHAC__", khacList);
+
+      // Điền dữ liệu theo từng nhóm, chèn dòng khi cần
+      let rowOffset = 0;
+      let lastDataRow = ORIGINAL_TOTAL_ROW - 1; // dòng dữ liệu cuối cùng = 39
+
+      for (const layout of groupLayout) {
+        const actualStartRow = layout.startRow + rowOffset;
+        const violations = violationsListByGroup.get(layout.group) || [];
+        const extraRows = Math.max(0, violations.length - layout.defaultRows);
+
+        if (extraRows > 0) {
+          // Chèn thêm dòng trống vào cuối phần của nhóm này
+          const insertAt = actualStartRow + layout.defaultRows;
+          for (let i = 0; i < extraRows; i++) {
+            ws.spliceRows(insertAt + i, 0, []);
+          }
+          rowOffset += extraRows;
+          lastDataRow += extraRows;
+        }
+
+        // Điền vi phạm vào các dòng
+        violations.forEach((v, idx) => {
+          const targetRow = actualStartRow + idx;
+          ws.getCell(`C${targetRow}`).value = v.count;
+          ws.getCell(`D${targetRow}`).value = v.desc;
+          ws.getCell(`E${targetRow}`).value = v.basePoint;
+          ws.getCell(`F${targetRow}`).value = v.adjusted;
+          ws.getCell(`G${targetRow}`).value = { formula: `C${targetRow}*F${targetRow}` };
+          if (v.notes.length > 0) {
+            // Mỗi ghi chú trên một dòng riêng - dễ đọc hơn trong Excel
+            ws.getCell(`H${targetRow}`).value = v.notes.join('\n');
+            ws.getCell(`H${targetRow}`).alignment = { wrapText: true, vertical: 'top' };
           }
         });
-        ws.getCell('G40').value = { formula: 'SUM(G5:G39)' };
-        ws.getCell('G41').value = { formula: '100-G40' }; 
-      } else {
-        ws.getCell('G40').value = 0;
-        ws.getCell('G41').value = { formula: '100-G40' };
       }
+
+      // Dòng 40: chỉ ghi G40=SUM tổng điểm trừ, không đụng C40/D-F40
+      // Dòng 41: G41 = 100 - G40
+      const totalRow = lastDataRow + 1;  // = 40 + rowOffset
+      const scoreRow = lastDataRow + 2;  // = 41 + rowOffset
+      ws.getCell(`G${totalRow}`).value = { formula: `SUM(G5:G${lastDataRow})` };
+      ws.getCell(`G${scoreRow}`).value = { formula: `100-G${totalRow}` };
     }
+
     const out = await wb.xlsx.writeBuffer();
     saveAs(new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), `BangChamDiem_${label}.xlsx`);
   };
@@ -286,20 +364,13 @@ function ExportModal({ onClose, departments }) {
       if (mode === "cap") {
         await exportCAP(rows, label, selectedDept);
       } else {
+        // Lấy thông tin số người (hệ số) của từng bộ phận từ gemba_scores
         const gembaScoresCollectionRef = collection(db, "gemba_scores");
         const scoresSnapshot = await getDocs(gembaScoresCollectionRef);
         const allDeptData = new Map();
         scoresSnapshot.forEach(doc => { allDeptData.set(doc.id, doc.data()); });
-        const activeRows = rows.filter(row => {
-            const deptData = allDeptData.get(row.department);
-            if (!deptData || !deptData.scores) return true;
-            return deptData.scores.some(score => {
-                const scoreTs = safeTsToDate(score.timestamp)?.getTime();
-                const rowTs = safeTsToDate(row.timestamp)?.getTime();
-                return scoreTs === rowTs;
-            });
-        });
-        await exportBangChamDiem(activeRows, label, allDeptData);
+        // Dùng trực tiếp rows từ gemba_events (không filter theo timestamp vì server/client timestamp khác nhau)
+        await exportBangChamDiem(rows.filter(r => !r.isReminder), label, allDeptData);
       }
     } catch (err) {
       console.error("Có lỗi khi xuất báo cáo:", err);
@@ -360,7 +431,7 @@ function ImprovementModal({ modalData, onClose, onSave }) {
   const handleImageChange = async (e) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
-      const opt = { maxSizeMB: 3, maxWidthOrHeight: 1920, useWebWorker: true };
+      const opt = { maxSizeMB: 2, maxWidthOrHeight: 1920, useWebWorker: true };
       try {
         const processed = file.size > opt.maxSizeMB * 1024 * 1024 ? await imageCompression(file, opt) : file;
         setImprovementImageFile(processed);
@@ -425,6 +496,7 @@ function ImprovementModal({ modalData, onClose, onSave }) {
    Component chính GembaCheckList
    ========================= */
 function GembaCheckList({ user, isMobile, newErrorCounts, setGembaNotifCounts }) {
+  const { t } = useI18n();
   const [depIndex, setDepIndex] = useState(0);
   const [selectedGroup, setSelectedGroup] = useState("");
   const [selectedError, setSelectedError] = useState("");
@@ -450,6 +522,14 @@ function GembaCheckList({ user, isMobile, newErrorCounts, setGembaNotifCounts })
   const isCustomError = selectedGroup === "Lỗi Khác";
   const userRole = (user && user.role) ? user.role.toLowerCase() : "";
 
+  // === Tự sửa chính tả ===
+  const CLOUD_FUNCTION_URL = 'https://askai-zvblqnzy1q-as.a.run.app';
+  const [autoCorrect, setAutoCorrect] = useState(true);
+  const [isReminder, setIsReminder] = useState(false);
+  const [isCorrecting, setIsCorrecting] = useState(false);
+  const [showCorrectModal, setShowCorrectModal] = useState(false);
+  const [correctedNote, setCorrectedNote] = useState("");
+
   const scoreList = allScores
     .filter(score => {
         const scoreDate = safeTsToDate(score.timestamp);
@@ -463,7 +543,7 @@ function GembaCheckList({ user, isMobile, newErrorCounts, setGembaNotifCounts })
         return dateB - dateA;
     });
 
-  const sum = scoreList.reduce((total, error) => total + (error.point + heSo) / 2, 0);
+  const sum = scoreList.reduce((total, error) => total + (error.isReminder ? 0 : (error.point + heSo) / 2), 0);
   const remainingScore = 100 - sum;
 
   useEffect(() => {
@@ -479,6 +559,11 @@ function GembaCheckList({ user, isMobile, newErrorCounts, setGembaNotifCounts })
       } else {
         setAllScores([]); setPeopleCount(defaultPeople);
       }
+      setLoading(false);
+    }, (error) => {
+      // Không có quyền đọc gemba_scores → render trang trống, không crash
+      console.warn("Lỗi onSnapshot gemba_scores:", error.code);
+      setAllScores([]);
       setLoading(false);
     });
     return () => unsub();
@@ -510,9 +595,16 @@ function GembaCheckList({ user, isMobile, newErrorCounts, setGembaNotifCounts })
     const departmentName = departments[index].name;
     if (newErrorCounts && newErrorCounts[departmentName] > 0) {
       try {
-        const timestamps = JSON.parse(localStorage.getItem("gembaLastSeenTimestamps") || "{}");
-        timestamps[departmentName] = new Date().toISOString();
-        localStorage.setItem("gembaLastSeenTimestamps", JSON.stringify(timestamps));
+        const now = new Date().toISOString();
+        const storageKey = "gembaLastSeenTimestamps";
+        const timestamps = JSON.parse(localStorage.getItem(storageKey) || "{}");
+        timestamps[departmentName] = now;
+        localStorage.setItem(storageKey, JSON.stringify(timestamps));
+        // Đồng bộ lên Firestore để sự dụng cross-device
+        if (user && user.uid) {
+          const prefRef = doc(db, "user_prefs", user.uid);
+          setDoc(prefRef, { [storageKey]: timestamps }, { merge: true }).catch(e => console.warn("Lưu prefs lỗi:", e));
+        }
         const updatedCounts = { ...newErrorCounts, [departmentName]: 0 };
         setGembaNotifCounts(updatedCounts);
       } catch (e) { console.error("Lỗi khi cập nhật localStorage:", e); }
@@ -533,7 +625,7 @@ function GembaCheckList({ user, isMobile, newErrorCounts, setGembaNotifCounts })
         if (fileRef.current) fileRef.current.value = "";
         return;
       }
-      const opt = { maxSizeMB: 3, maxWidthOrHeight: 1920, useWebWorker: true };
+      const opt = { maxSizeMB: 2, maxWidthOrHeight: 1920, useWebWorker: true };
       try {
         const processedFiles = await Promise.all(files.map(file => 
           file.size > opt.maxSizeMB * 1024 * 1024 ? imageCompression(file, opt) : file
@@ -554,11 +646,42 @@ function GembaCheckList({ user, isMobile, newErrorCounts, setGembaNotifCounts })
   };
 
   async function handleAddError() {
-    if (!selectedGroup) { alert("Vui lòng chọn nhóm lỗi."); return; }
-    if (!isCustomError && !selectedError) { alert("Vui lòng chọn lỗi cụ thể."); return; }
-    if (isCustomError && !note.trim()) { alert("Vui lòng nhập mô tả chi tiết cho lỗi tại ô Ghi chú."); return; }
-    if (imageFiles.length === 0) { alert("Vui lòng tải lên ít nhất 1 ảnh bằng chứng."); return; }
-    
+    if (!selectedGroup) { alert(t("gemba.alert.selectGroup")); return; }
+    if (!isCustomError && !selectedError) { alert(t("gemba.alert.selectError")); return; }
+    if (isCustomError && !note.trim()) { alert(t("gemba.alert.requireNote")); return; }
+    if (imageFiles.length === 0) { alert(t("gemba.alert.requirePhoto")); return; }
+
+    // Nếu bật tự sửa và có ghi chú, gọi Gemini để sửa trước
+    if (autoCorrect && note.trim()) {
+      setIsCorrecting(true);
+      try {
+        const response = await fetch(CLOUD_FUNCTION_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: `Sửa lỗi chính tả, câu cú và dấu câu cho đoạn văn tiếng Việt sau. Chỉ trả về đoạn văn đã sửa, không giải thích, không thêm nội dung nào khác:\n${note.trim()}`,
+            history: []
+          }),
+        });
+        if (response.ok) {
+          const data = await response.json();
+          const corrected = (data.response || "").trim();
+          setCorrectedNote(corrected);
+          setShowCorrectModal(true);
+          setIsCorrecting(false);
+          return; // dừng ở đây, chờ người dùng xác nhận trong popup
+        }
+      } catch (e) {
+        console.error("Lỗi sửa chính tả:", e);
+      }
+      setIsCorrecting(false);
+    }
+
+    // Không sửa hoặc sửa thất bại → lưu thẳng
+    await doSaveError(note);
+  }
+
+  async function doSaveError(noteToUse) {
     setIsUploading(true);
     let urls = [];
     try {
@@ -579,11 +702,12 @@ function GembaCheckList({ user, isMobile, newErrorCounts, setGembaNotifCounts })
     let newErrorObject;
     if (isCustomError) {
       const points = { Nhẹ: 2, Nặng: 4, "Nghiêm trọng": 6 };
-      newErrorObject = { group: selectedGroup, code: `custom-${Date.now()}`, desc: note, point: points[otherErrorSeverity], timestamp: Timestamp.now(), imageUrls: urls, note: note, addedBy: user.name };
+      // desc luôn là "Lỗi khác", nội dung chi tiết người đăng nằm trong note
+      newErrorObject = { group: selectedGroup, code: `custom-${Date.now()}`, desc: "Lỗi khác", point: points[otherErrorSeverity], timestamp: Timestamp.now(), imageUrls: urls, note: noteToUse, addedBy: user.name, isReminder };
     } else {
       const errors = (errorGroups.find((g) => g.group === selectedGroup) || { items: [] }).items;
       const err = errors.find((e) => e.code === selectedError);
-      newErrorObject = { group: selectedGroup, ...err, timestamp: Timestamp.now(), imageUrls: urls, note: note, addedBy: user.name };
+      newErrorObject = { group: selectedGroup, ...err, timestamp: Timestamp.now(), imageUrls: urls, note: noteToUse, addedBy: user.name, isReminder };
     }
     const docRef = doc(db, "gemba_scores", dep.name);
     const docSnap = await getDoc(docRef);
@@ -592,19 +716,62 @@ function GembaCheckList({ user, isMobile, newErrorCounts, setGembaNotifCounts })
     const eventData = { department: dep.name, error: { ...newErrorObject, timestamp: new Date().toLocaleString("vi-VN") }, peopleCount: peopleCount, heSo: heSo, addedBy: user.name, timestamp: serverTimestamp() };
     await addDoc(collection(db, "gemba_events"), eventData);
 
+    try {
+      await addDoc(collection(db, "notifications"), {
+        type: "new_gemba_error",
+        message: `${user.name} đã thêm lỗi mới tại ${dep.name}: ${newErrorObject.desc}`,
+        targetRoles: ["ehs", "admin", "ehs committee"],
+        createdBy: user.uid,
+        readBy: [],
+        timestamp: serverTimestamp()
+      });
+    } catch (e) {
+      console.error("Lỗi gửi thông báo:", e);
+    }
+
     setSelectedError(""); 
     setImageFiles([]);
     setImageFileNames([]);
     if (fileRef.current) fileRef.current.value = "";
-    setOtherErrorSeverity("Nhẹ"); setNote(""); setIsUploading(false);
+    setOtherErrorSeverity("Nhẹ"); setNote(""); setIsUploading(false); setIsReminder(false);
   }
 
   async function handleDelete(idx) {
     const errorToDelete = scoreList[idx];
     if (window.confirm(`Bạn có chắc muốn XÓA VĨNH VIỄN lỗi "${errorToDelete.desc}" không?`)) {
+        // 1. Cập nhật gemba_scores
         const newAllScores = allScores.filter(score => score.timestamp !== errorToDelete.timestamp);
         const docRef = doc(db, "gemba_scores", dep.name);
         await setDoc(docRef, { scores: newAllScores }, { merge: true });
+
+        // 2. Xóa ảnh khỏi Storage
+        const images = errorToDelete.imageUrls || (errorToDelete.imageUrl ? [errorToDelete.imageUrl] : []);
+        for (const url of images) {
+          try { await deleteObject(ref(storage, url)); } catch (e) { console.error("Lỗi xóa ảnh gốc:", e); }
+        }
+        if (errorToDelete.improvementImageUrl) {
+          try { await deleteObject(ref(storage, errorToDelete.improvementImageUrl)); } catch(e) { console.error("Lỗi xóa ảnh cải thiện:", e); }
+        }
+
+        // 3. Xóa khỏi collection gemba_events
+        try {
+          const q = query(collection(db, "gemba_events"), where("department", "==", dep.name));
+          const snap = await getDocs(q);
+          const errorDateStr = safeTsToDate(errorToDelete.timestamp)?.toLocaleString("vi-VN");
+          
+          snap.forEach(async (d) => {
+            const ev = d.data();
+            const evError = ev.error || {};
+            
+            const hasSameImage = (evError.imageUrls && evError.imageUrls[0] && errorToDelete.imageUrls && evError.imageUrls[0] === errorToDelete.imageUrls[0]) || (evError.imageUrl && errorToDelete.imageUrl && evError.imageUrl === errorToDelete.imageUrl);
+            const isSameCustom = evError.code === errorToDelete.code && errorToDelete.code?.startsWith("custom-");
+            const isSameStandard = evError.code === errorToDelete.code && evError.addedBy === errorToDelete.addedBy && evError.timestamp === errorDateStr;
+
+            if (hasSameImage || isSameCustom || isSameStandard) {
+               await deleteDoc(d.ref);
+            }
+          });
+        } catch (e) { console.error("Lỗi xóa khỏi gemba_events:", e); }
     }
   }
   
@@ -628,22 +795,56 @@ function GembaCheckList({ user, isMobile, newErrorCounts, setGembaNotifCounts })
 
   const openViewer = (list, index = 0) => setViewer({ open: true, list, index });
   const closeViewer = () => setViewer({ open: false, list: [], index: 0 });
+  const goPrev = () => setViewer(v => ({ ...v, index: (v.index - 1 + v.list.length) % v.list.length }));
+  const goNext = () => setViewer(v => ({ ...v, index: (v.index + 1) % v.list.length }));
 
   return (
     <div style={{ display: 'flex', justifyContent: 'center', padding: isMobile ? '10px' : '30px' }}>
       <div style={{ width: '100%', maxWidth: '1600px' }}>
         {showExportModal && <ExportModal onClose={() => setShowExportModal(false)} departments={departments} />}
         {improvementModal.isOpen && <ImprovementModal modalData={improvementModal} onClose={() => setImprovementModal({ isOpen: false, error: null, index: -1 })} onSave={handleSaveImprovement} />}
-        
-        {viewer.open && (
-          <div onClick={closeViewer} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 2000 }}>
-            <img 
-              src={viewer.list[viewer.index]} 
-              alt={`Xem ảnh ${viewer.index + 1}`} 
-              style={{ maxHeight: "90vh", maxWidth: "90vw", borderRadius: 8 }}
-            />
+
+        {/* Popup xác nhận sửa chính tả */}
+        {showCorrectModal && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1002 }}>
+            <div style={{ background: '#fff', padding: 26, borderRadius: 16, width: '92%', maxWidth: 540, boxShadow: '0 6px 32px rgba(0,0,0,.25)' }}>
+              <h3 style={{ marginTop: 0, color: colors.primary, display: 'flex', alignItems: 'center', gap: 8 }}>
+                ✍️ Đề xuất sửa ghi chú
+              </h3>
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontWeight: 600, color: '#888', marginBottom: 6, fontSize: 13 }}>Bản gốc:</div>
+                <div style={{ background: '#fff8e1', border: '1px solid #ffe082', borderRadius: 8, padding: '10px 14px', fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{note}</div>
+              </div>
+              <div style={{ marginBottom: 22 }}>
+                <div style={{ fontWeight: 600, color: '#2e7d32', marginBottom: 6, fontSize: 13 }}>✨ Đã sửa:</div>
+                <div style={{ background: '#f1f8e9', border: '1px solid #a5d6a7', borderRadius: 8, padding: '10px 14px', fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{correctedNote}</div>
+              </div>
+              <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                <button
+                  onClick={async () => { setShowCorrectModal(false); await doSaveError(note); }}
+                  style={{ padding: '8px 18px', borderRadius: 8, border: `1px solid ${colors.border}`, background: '#f5f5f5', cursor: 'pointer', fontWeight: 600, fontSize: 14 }}
+                >
+                  Dùng bản gốc
+                </button>
+                <button
+                  onClick={async () => { setShowCorrectModal(false); await doSaveError(correctedNote); }}
+                  style={{ padding: '8px 22px', borderRadius: 8, border: 'none', background: '#2e7d32', color: '#fff', cursor: 'pointer', fontWeight: 700, fontSize: 14 }}
+                >
+                  ✓ Dùng bản đã sửa
+                </button>
+              </div>
+            </div>
           </div>
         )}
+        
+        <LightboxSwipeOnly
+          open={viewer.open}
+          list={viewer.list}
+          index={viewer.index}
+          onClose={closeViewer}
+          onPrev={goPrev}
+          onNext={goNext}
+        />
 
         <div style={{ display: "flex", flexDirection: isMobile ? 'column' : 'row', alignItems: "flex-start", gap: 32, width: "100%" }}>
           <style>{numberInputWebkitStyle}</style>
@@ -651,63 +852,89 @@ function GembaCheckList({ user, isMobile, newErrorCounts, setGembaNotifCounts })
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap" }}>
               <div style={{ fontWeight: 700, fontSize: isMobile ? 16 : 18, color: colors.primary, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                 <span>Bộ phận: {departments[depIndex].name} |</span>
-                <span>Số người:</span>
+                <span>{t("gemba.people")}</span>
                 {(userRole === "admin" || userRole === "ehs") ? (<input type="number" value={peopleCount} onChange={(e) => setPeopleCount(parseInt(e.target.value, 10) || 0)} onBlur={handleSavePeople} style={numberInputStyle} />) : ( <span>{peopleCount}</span> )}
-                <span>| Hệ số: {heSo}</span>
+                <span>| {t("gemba.factor")} {heSo}</span>
               </div>
               <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
                   <input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} style={{ padding: 8, borderRadius: 6, border: `1px solid ${colors.border}` }} />
                   <button onClick={() => setShowExportModal(true)} style={{ background: colors.success, color: colors.white, border: "none", padding: "8px 15px", borderRadius: 6, fontWeight: "bold", cursor: "pointer", marginTop: isMobile ? 10 : 0 }}>
-                     Xuất báo cáo
+                   {t("common.export")}
                   </button>
               </div>
             </div>
             <div style={{ marginBottom: 15 }}>
-                <div style={{ fontSize: 15, color: colors.textPrimary, marginBottom: 5 }}>Chọn nhóm lỗi:</div>
+                <div style={{ fontSize: 15, color: colors.textPrimary, marginBottom: 5 }}>{t("gemba.group.label")}</div>
                 <select value={selectedGroup} onChange={(e) => { setSelectedGroup(e.target.value); setSelectedError(""); }} style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: `1.5px solid ${colors.primaryLight}`, fontSize: 15 }}>
-                <option value="">-- Chọn nhóm lỗi --</option>
+                <option value="">{t("gemba.group.placeholder")}</option>
                 {errorGroups.map((g) => <option key={g.group} value={g.group}>{g.group}</option>)}
                 </select>
             </div>
             {!isCustomError && selectedGroup && (
               <div style={{ marginBottom: 15 }}>
-                  <div style={{ fontSize: 15, color: colors.textPrimary, marginBottom: 5 }}>Chọn lỗi:</div>
+                  <div style={{ fontSize: 15, color: colors.textPrimary, marginBottom: 5 }}>{t("gemba.error.label")}</div>
                   <select value={selectedError} onChange={(e) => setSelectedError(e.target.value)} style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: `1.5px solid ${colors.primaryLight}`, fontSize: 15 }}>
-                  <option value="">-- Chọn lỗi --</option>
+                  <option value="">{t("gemba.error.placeholder")}</option>
                   {(errorGroups.find(g => g.group === selectedGroup)?.items || []).map(e => <option key={e.code} value={e.code}>{e.code} - {e.desc} ({e.point}đ)</option>)}
                   </select>
               </div>
             )}
             {isCustomError && (
                 <div style={{ border: `1.5px solid ${colors.primaryLight}`, borderRadius: 8, padding: 15, marginBottom: 15 }}>
-                    <div style={{ fontSize: 15, color: colors.textPrimary, fontWeight: 700, marginBottom: 10 }}>Chi tiết lỗi khác:</div>
+                    <div style={{ fontSize: 15, color: colors.textPrimary, fontWeight: 700, marginBottom: 10 }}>{t("gemba.custom.detail")}</div>
                     <div style={{ marginBottom: 10 }}>
-                        <div style={{ fontSize: 15, color: colors.textPrimary, marginBottom: 5 }}>Mức độ nghiêm trọng:</div>
+                        <div style={{ fontSize: 15, color: colors.textPrimary, marginBottom: 5 }}>{t("gemba.custom.severity")}</div>
                         <div style={{ display: "flex", gap: 15, flexWrap: "wrap" }}>
                         {["Nhẹ", "Nặng", "Nghiêm trọng"].map(level => ( <label key={level}> <input type="radio" name="severity" value={level} checked={otherErrorSeverity === level} onChange={(e) => setOtherErrorSeverity(e.target.value)} style={{ marginRight: 4, accentColor: colors.primary }} /> {level} ({level === "Nhẹ" ? 2 : level === "Nặng" ? 4 : 6}đ) </label> ))}
                         </div>
                     </div>
                 </div>
             )}
-            <div style={{ marginBottom: 15 }}>
-                <div style={{ fontSize: 15, color: colors.textPrimary, marginBottom: 5 }}>Ghi chú (giải thích lỗi):</div>
-                <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder={isCustomError ? "Nhập mô tả chi tiết cho lỗi..." : "Thêm giải thích chi tiết nếu cần..."} style={{ width: "100%", minHeight: 60, boxSizing: "border-box", padding: "8px 12px", borderRadius: 8, border: `1.5px solid ${colors.primaryLight}`, fontSize: 15, fontFamily: "sans-serif" }} />
+            <div style={{ marginBottom: 8 }}>
+                <div style={{ fontSize: 15, color: colors.textPrimary, marginBottom: 5 }}>{t("gemba.note.label")}</div>
+                <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder={isCustomError ? t("gemba.note.custom.placeholder") : t("gemba.note.placeholder")} style={{ width: "100%", minHeight: 60, boxSizing: "border-box", padding: "8px 12px", borderRadius: 8, border: `1.5px solid ${colors.primaryLight}`, fontSize: 15, fontFamily: "sans-serif" }} />
+            </div>
+            {/* Checkbox tự sửa chính tả và Nhắc nhở */}
+            <div style={{ display: 'flex', gap: 20, marginBottom: 18, flexWrap: 'wrap' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }}>
+                <input
+                  type="checkbox"
+                  checked={autoCorrect}
+                  onChange={e => setAutoCorrect(e.target.checked)}
+                  style={{ width: 16, height: 16, accentColor: colors.primary, cursor: 'pointer' }}
+                />
+                <span style={{ fontSize: 14, color: colors.textPrimary, fontWeight: 500 }}>
+                  {t("gemba.autoCorrect")}
+                </span>
+              </label>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }}>
+                <input
+                  type="checkbox"
+                  checked={isReminder}
+                  onChange={e => setIsReminder(e.target.checked)}
+                  style={{ width: 16, height: 16, accentColor: colors.primary, cursor: 'pointer' }}
+                />
+                <span style={{ fontSize: 14, color: colors.textPrimary, fontWeight: 500 }}>
+                  Nhắc nhở (Không trừ điểm)
+                </span>
+              </label>
             </div>
 
             <div style={{ marginBottom: 24, display: 'flex', alignItems: 'center', gap: 10, flexWrap: "wrap" }}>
                 <input id="imageUploadGemba" type="file" accept="image/*" onChange={handleImageChange} ref={fileRef} style={{ display: 'none' }} multiple />
                 <label htmlFor="imageUploadGemba" style={{background: 'white', color: colors.primary, border: `1.2px solid ${colors.primaryLight}`, borderRadius: 8, padding: '8px 15px', cursor: 'pointer', fontWeight: 600}}>
-                    Ảnh đính kèm ({imageFiles.length}/5)
+                    {t("gemba.attach", { count: imageFiles.length }).replace("{count}", imageFiles.length)}
                 </label>
                 <span style={{fontStyle: 'italic', fontSize: 14, color: '#555', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
-                    {imageFileNames.length > 0 ? imageFileNames.join(', ') : "Chưa có ảnh"}
+                    {imageFileNames.length > 0 ? imageFileNames.join(', ') : t("common.noImage")}
                 </span>
-                <button onClick={handleAddError} disabled={isUploading} style={{ marginLeft: 'auto', height: 38, background: colors.primary, color: colors.white, borderRadius: 9, border: "none", padding: "0 26px", fontWeight: 700, fontSize: 16, cursor: "pointer", opacity: isUploading ? 0.6 : 1 }}>
-                    {isUploading ? "Đang tải..." : "Thêm"}
+                <button onClick={handleAddError} disabled={isUploading || isCorrecting} style={{ marginLeft: 'auto', height: 38, background: isCorrecting ? '#888' : colors.primary, color: colors.white, borderRadius: 9, border: "none", padding: "0 26px", fontWeight: 700, fontSize: 16, cursor: "pointer", opacity: (isUploading || isCorrecting) ? 0.7 : 1 }}>
+                    {isCorrecting ? t("gemba.correcting") : isUploading ? t("gemba.uploading") : t("gemba.add")}
                 </button>
             </div>
             
-            {loading ? <div>Đang tải dữ liệu...</div> : (
+            {loading ? <div>{t("gemba.loading")}</div> : (
               isMobile ? (
                 <div style={{ display: 'grid', gap: 12 }}>
                   {scoreList.length > 0 ? scoreList.map((e, i) => {
@@ -721,12 +948,12 @@ function GembaCheckList({ user, isMobile, newErrorCounts, setGembaNotifCounts })
                           <div style={{ fontWeight: 700, color: colors.primary }}>{e.group}</div>
                         </div>
                         <div style={{ marginTop: 6, overflowWrap:'anywhere' }}>
-                          {e.desc}
-                          {e.addedBy && <div style={{fontSize: 11, color: colors.textSecondary, fontStyle:'italic'}}>Bởi: {e.addedBy}</div>}
+                          {e.group === 'Lỗi Khác' ? 'Lỗi khác' : e.desc}
+                          {e.addedBy && <div style={{fontSize: 11, color: colors.textSecondary, fontStyle:'italic'}}>{t("gemba.by")} {e.addedBy}</div>}
                         </div>
                         {images.length > 0 && (
                           <div style={{ marginTop: 8 }}>
-                            <div style={{ position:'relative', display:'inline-block', cursor:'pointer' }} onClick={() => openViewer(images)}>
+                            <div style={{ position:'relative', display:'inline-block', cursor:'pointer' }} onClick={() => openViewer(images, 0)}>
                               <img src={thumbMap[images[0]] || images[0]} alt="ảnh lỗi" style={{ width: 56, height: 56, borderRadius: 6, objectFit:'cover' }}/>
                               {images.length > 1 && (
                                 <span style={{ position:'absolute', top:-6, right:-6, background:'rgba(0,0,0,0.7)', color:'#fff', borderRadius:'50%', width:20, height:20, fontSize:12, display:'flex', alignItems:'center', justifyContent:'center' }}>+{images.length-1}</span>
@@ -734,30 +961,32 @@ function GembaCheckList({ user, isMobile, newErrorCounts, setGembaNotifCounts })
                             </div>
                           </div>
                         )}
-                        <div style={{ marginTop: 10, fontWeight: 700, color: colors.primary }}>Điểm trừ: {((e.point + heSo) / 2).toFixed(2)}</div>
+                        <div style={{ marginTop: 10, fontWeight: 700, color: colors.primary }}>
+                          {e.isReminder ? "Nhắc nhở (Không trừ điểm)" : `Điểm trừ: ${((e.point + heSo) / 2).toFixed(2)}`}
+                        </div>
                         <div style={{ marginTop: 8, display:'flex', justifyContent:'flex-end', gap:6, alignItems:'center' }}>
-                          <ActionButton onClick={() => setImprovementModal({ isOpen: true, error: e, index: i })} title="Cải thiện/Khắc phục" color={colors.white} bg={isImproved ? '#4caf50' : '#f44336'}><ImprovementIcon /></ActionButton>
+                          <ActionButton onClick={() => setImprovementModal({ isOpen: true, error: e, index: i })} title={t("gemba.improve.action")} color={colors.white} bg={isImproved ? '#4caf50' : '#f44336'}><ImprovementIcon /></ActionButton>
                           {(userRole === 'admin' || userRole === 'ehs') && (
-                            <ActionButton onClick={() => handleDelete(i)} title="Xóa lỗi" color="#d32f2f" bg="transparent">x</ActionButton>
+                            <ActionButton onClick={() => handleDelete(i)} title={t("gemba.delete.action")} color="#d32f2f" bg="transparent">x</ActionButton>
                           )}
                         </div>
                       </div>
                     );
                   }) : (
-                    <div style={{textAlign:'center', padding:20}}>Không có lỗi nào trong tháng này.</div>
+                    <div style={{textAlign:'center', padding:20}}>{t("gemba.empty")}</div>
                   )}
                 </div>
               ) : (
     <table style={{ marginTop: 10, width: "100%", borderCollapse: "separate", borderSpacing: 0, boxShadow: "0 1.5px 10px #E88E2E11", border: `1.2px solid ${colors.primaryLight}`, background: colors.surface, borderRadius: 12, overflow: "hidden" }}>
                   <thead>
                     <tr style={{ background: colors.primaryLight }}>
-                        <th style={{ padding: "10px 14px", color: colors.textPrimary }}>Thời gian</th>
-                        <th style={{ padding: "10px 14px", color: colors.textPrimary }}>Nhóm lỗi</th>
-                        <th style={{ padding: "10px 14px", color: colors.textPrimary, width: "40%" }}>Mô tả</th>
-                        <th style={{ padding: "10px 8px", color: colors.textPrimary }}>Ảnh</th>
-                        <th style={{ padding: "10px 8px", color: colors.textPrimary }}>Ghi chú</th>
-                        <th style={{ padding: "10px 8px", color: colors.textPrimary }}>Điểm trừ</th>
-                        <th style={{ padding: "10px 8px", color: colors.textPrimary, minWidth: 120 }}>Hành động</th>
+                        <th style={{ padding: "10px 14px", color: colors.textPrimary }}>{t("gemba.table.time")}</th>
+                        <th style={{ padding: "10px 14px", color: colors.textPrimary }}>{t("gemba.table.group")}</th>
+                        <th style={{ padding: "10px 14px", color: colors.textPrimary, width: "40%" }}>{t("gemba.table.desc")}</th>
+                        <th style={{ padding: "10px 8px", color: colors.textPrimary }}>{t("gemba.table.photo")}</th>
+                        <th style={{ padding: "10px 8px", color: colors.textPrimary }}>{t("gemba.table.note")}</th>
+                        <th style={{ padding: "10px 8px", color: colors.textPrimary }}>{t("gemba.table.deduction")}</th>
+                        <th style={{ padding: "10px 8px", color: colors.textPrimary, minWidth: 120 }}>{t("gemba.table.action")}</th>
                     </tr>
                   </thead>
                   <tbody key={dep.name}>
@@ -769,10 +998,10 @@ function GembaCheckList({ user, isMobile, newErrorCounts, setGembaNotifCounts })
                       <tr key={`${e.code}-${dateForkey ? dateForkey.getTime() : i}`}>
                       <td style={{ padding: "10px 14px", fontSize: 12 }}>{safeTsToDate(e.timestamp)?.toLocaleString("vi-VN")}</td>
                       <td style={{ padding: "10px 14px" }}>{e.group}</td>
-                      <td style={{ padding: "10px 14px" }}>{e.desc} {e.addedBy && <div style={{fontSize: '11px', color: colors.textSecondary, fontStyle: 'italic'}}>Bởi: {e.addedBy}</div>}</td>
+                      <td style={{ padding: "10px 14px" }}>{e.group === 'Lỗi Khác' ? 'Lỗi khác' : e.desc} {e.addedBy && <div style={{fontSize: '11px', color: colors.textSecondary, fontStyle: 'italic'}}>{t("gemba.by")} {e.addedBy}</div>}</td>
                       <td style={{ padding: "10px 8px", textAlign: "center" }}>
                         {images.length > 0 && (
-                          <div style={{ position: 'relative', display: 'inline-block', cursor: 'pointer' }} onClick={() => openViewer(images)}>
+                          <div style={{ position: 'relative', display: 'inline-block', cursor: 'pointer' }} onClick={() => openViewer(images, 0)}>
                             <img src={thumbMap[images[0]] || images[0]} alt="ảnh lỗi" style={{ width: 40, height: 40, borderRadius: 4, objectFit: "cover" }}/>
                             {images.length > 1 && (
                               <span style={{ position: 'absolute', top: -5, right: -5, background: 'rgba(0,0,0,0.7)', color: 'white', borderRadius: '50%', width: 18, height: 18, fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -782,8 +1011,9 @@ function GembaCheckList({ user, isMobile, newErrorCounts, setGembaNotifCounts })
                           </div>
                         )}
                       </td>
-                      <td style={{ padding: "10px 8px", textAlign: "center" }}>{e.note && <button onClick={() => alert(`Ghi chú:\n\n${e.note}`)} style={{ border: "none", background: "transparent", fontSize: 24, cursor: "pointer" }} title="Xem ghi chú">🗒️</button>}</td>
-                      <td style={{ padding: "10px 8px", fontWeight: 700, color: colors.primary, textAlign: "center" }}>{((e.point + heSo) / 2).toFixed(2)}</td>
+                      {/* Ghi chú: với Lỗi Khác, fallback về desc cũ nếu note trống (dữ liệu cũ lưu desc = text dài) */}
+                      <td style={{ padding: "10px 8px", textAlign: "center" }}>{(e.note || (e.group === 'Lỗi Khác' && e.desc !== 'Lỗi khác' ? e.desc : null)) && <button onClick={() => alert(`Ghi chú:\n\n${e.note || e.desc}`)} style={{ border: "none", background: "transparent", fontSize: 24, cursor: "pointer" }} title="Xem ghi chú">🗒️</button>}</td>
+                      <td style={{ padding: "10px 8px", fontWeight: 700, color: colors.primary, textAlign: "center", fontSize: e.isReminder ? 12 : 14 }}>{e.isReminder ? "Nhắc nhở" : ((e.point + heSo) / 2).toFixed(2)}</td>
                       <td style={{ textAlign: "center" }}>
                           <div style={{display: 'flex', justifyContent: 'center', alignItems: 'center'}}>
                             <ActionButton onClick={() => setImprovementModal({ isOpen: true, error: e, index: i })} title="Cải thiện/Khắc phục" color={colors.white} bg={isImproved ? "#4caf50" : "#f44336"}> <ImprovementIcon /> </ActionButton>
@@ -791,7 +1021,7 @@ function GembaCheckList({ user, isMobile, newErrorCounts, setGembaNotifCounts })
                           </div>
                       </td>
                       </tr>
-                  )}) : ( <tr><td colSpan="7" style={{textAlign: 'center', padding: '20px'}}>Không có lỗi nào trong tháng này.</td></tr> )}
+                  )}) : ( <tr><td colSpan="7" style={{textAlign: 'center', padding: '20px'}}>{t("gemba.empty")}</td></tr> )}
                   </tbody>
               </table>
               ))}

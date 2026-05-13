@@ -3,6 +3,7 @@ import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
+import { getFunctions } from "firebase/functions";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAGvQfZqBI4QF6rIFLWVYMghkIuKlK6X6A",
@@ -20,3 +21,4 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 // Chỉ định tường minh đúng bucket gs://
 export const storage = getStorage(app, "gs://acp360.firebasestorage.app");
+export const functions = getFunctions(app, "asia-southeast1");

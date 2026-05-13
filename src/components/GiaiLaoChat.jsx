@@ -5,6 +5,7 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage
 import imageCompression from 'browser-image-compression';
 import { colors } from "../theme";
 import LightboxSwipeOnly from "./LightboxSwipeOnly";
+import { useI18n } from "../i18n/I18nProvider";
 
 const orange = colors.primary;
 const orangeLight = colors.primaryLight;
@@ -37,6 +38,7 @@ function UndoIcon({ size = 20 }) {
 // ===============================================================
 
 function GiaiLaoChat({ user }) {
+  const { t } = useI18n();
   const [chat, setChat] = useState([]);
   const [text, setText] = useState('');
   const [files, setFiles] = useState([]);
@@ -96,7 +98,7 @@ function GiaiLaoChat({ user }) {
   const handleImageChange = async (e) => {
     if (!e.target.files?.length) { setFiles([]); setFileNames([]); return; }
     const arr = Array.from(e.target.files);
-    const opt = { maxSizeMB: 3, maxWidthOrHeight: 1920, useWebWorker: true };
+    const opt = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: true };
     try {
       const processed = await Promise.all(arr.map(f => f.size > opt.maxSizeMB * 1024 * 1024 ? imageCompression(f, opt) : f));
       setFiles(processed); setFileNames(processed.map(f => f.name));
@@ -129,7 +131,7 @@ function GiaiLaoChat({ user }) {
 
   // Soft/Permanent delete (giữ nguyên)
   const handleSoftDelete = async (postId) => {
-    if (window.confirm("Bạn có muốn yêu cầu xóa bài đăng này không? EHS/Admin sẽ xem xét.")) {
+    if (window.confirm(t("common.confirmDelete"))) {
       const docRef = doc(db, "gialaokv", postId);
       await updateDoc(docRef, { pendingDeletion: true });
     }
@@ -139,19 +141,15 @@ function GiaiLaoChat({ user }) {
     await updateDoc(docRef, { pendingDeletion: false });
   };
   const handlePermanentDelete = async (message) => {
-    if (!window.confirm("Bạn có chắc muốn XÓA VĨNH VIỄN bài đăng này không?")) return;
+    if (!window.confirm(t("common.confirmPermanentDelete"))) return;
     try {
       if (message.images?.length) {
         for (const url of message.images) {
-          try {
-            await deleteObject(ref(storage, url));
-          } catch (error) {
-            if (error.code !== 'storage/object-not-found') console.error("Lỗi xóa ảnh:", error);
-          }
+          try { await deleteObject(ref(storage, url)); } catch (error) { if (error.code !== 'storage/object-not-found') console.error("Lỗi xóa ảnh:", error); }
         }
       }
       await deleteDoc(doc(db, "gialaokv", message.id));
-    } catch (err) { console.error("Lỗi khi xóa vĩnh viễn:", err); alert("Xóa bài đăng thất bại."); }
+    } catch (err) { console.error("Lỗi khi xóa vĩnh viễn:", err); alert(t("common.deleteFailed")); }
   };
 
   const filteredChat = useMemo(() => {
@@ -169,23 +167,23 @@ function GiaiLaoChat({ user }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <h2 style={{ fontWeight: 700, marginBottom: 16, color: orange, flexShrink: 0 }}>Giải lao & KV hút thuốc</h2>
+      <h2 style={{ fontWeight: 700, marginBottom: 16, color: orange, flexShrink: 0 }}>{t("break.title")}</h2>
       
       <form onSubmit={handleSend} style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0, marginBottom: 16 }}>
         <textarea 
-          value={text} onChange={e => setText(e.target.value)} placeholder="Nhập nội dung..."
+          value={text} onChange={e => setText(e.target.value)} placeholder={t("chat.placeholder")}
           rows={2} style={{ width: '100%', padding: "7px 12px", borderRadius: 6, boxSizing: 'border-box', border: `1.2px solid ${orangeLight}`, color: dark, background: "#fff" }}
         />
         <div style={{display: 'flex', alignItems: 'center', gap: 10}}>
           <input id="imageUploadChat" type="file" accept="image/*" onChange={handleImageChange} ref={fileRef} multiple style={{ display: 'none' }} />
           <label htmlFor="imageUploadChat" style={{background: 'white', color: orange, border: `1.2px solid ${orangeLight}`, borderRadius: 8, padding: '8px 15px', cursor: 'pointer', fontWeight: 600}}>
-            Ảnh đính kèm
+            {t("common.attach")}
           </label>
           <span style={{fontStyle: 'italic', fontSize: 14, color: '#555', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
-            {fileNames.length ? fileNames.join(', ') : "Chưa có ảnh"}
+            {fileNames.length ? fileNames.join(', ') : t("common.noImage")}
           </span>
           <button type="submit" disabled={isUploading} style={{ background: orange, color: "#fff", border: "none", padding: "8px 22px", borderRadius: 8, fontWeight: 700, fontSize: 15, boxShadow: "0 1px 8px #e88e2e22", cursor: "pointer", marginLeft: 'auto', opacity: isUploading ? 0.7 : 1 }}>
-            {isUploading ? 'Đang gửi...' : 'Gửi'}
+            {isUploading ? t('common.sending') : t('common.send')}
           </button>
         </div>
       </form>
@@ -197,16 +195,16 @@ function GiaiLaoChat({ user }) {
             <div key={msg.id} style={{ marginBottom: 10, display: 'flex', flexDirection: 'column', alignItems: msg.userId === user.uid ? 'flex-end' : 'flex-start' }}>
               <div style={{ maxWidth: '80%', borderRadius: 12, padding: '8px 12px', position: 'relative', border: `1px solid ${msg.pendingDeletion ? 'red' : '#f0e2cf'}`, background: msg.pendingDeletion ? '#fff0f0' : (msg.userId === user.uid ? orangeLight : 'white') }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <b style={{ color: orange, fontSize: 14 }}>{msg.user} {msg.pendingDeletion && <span style={{color: 'red'}}>(Chờ xóa)</span>}</b>
+                  <b style={{ color: orange, fontSize: 14 }}>{msg.user} {msg.pendingDeletion && <span style={{color: 'red'}}>{t("common.pendingDelete")}</span>}</b>
                   
                   <div>
                     {msg.pendingDeletion && (userRole === 'admin' || userRole === 'ehs') ? (
                       <div style={{display: 'flex', gap: '8px'}}>
-                        <button title="Xác nhận xóa" onClick={() => handlePermanentDelete(msg)} style={{ background:'transparent', border:'none', padding:4, cursor:'pointer' }}><CheckIcon/></button>
-                        <button title="Hủy yêu cầu xóa" onClick={() => handleCancelDelete(msg.id)} style={{ background:'transparent', border:'none', padding:4, cursor:'pointer' }}><UndoIcon/></button>
+                        <button title={t("chat.title.confirm.delete")} onClick={() => handlePermanentDelete(msg)} style={{ background:'transparent', border:'none', padding:4, cursor:'pointer' }}><CheckIcon/></button>
+                        <button title={t("chat.title.cancel.delete")} onClick={() => handleCancelDelete(msg.id)} style={{ background:'transparent', border:'none', padding:4, cursor:'pointer' }}><UndoIcon/></button>
                       </div>
                     ) : canInitiateDelete && !msg.pendingDeletion ? (
-                      <button title="Yêu cầu xóa" onClick={()=> handleSoftDelete(msg.id)} style={{ background:'transparent', border:'none', padding:4, cursor:'pointer' }}>
+                      <button title={t("chat.title.request.delete")} onClick={()=> handleSoftDelete(msg.id)} style={{ background:'transparent', border:'none', padding:4, cursor:'pointer' }}>
                         <RedXIcon />
                       </button>
                     ) : null}
@@ -227,12 +225,12 @@ function GiaiLaoChat({ user }) {
             </div>
           );
         })}
-        {clippedChat.length === 0 && chat.length === 0 && <div>Chưa có dữ liệu.</div>}
+        {clippedChat.length === 0 && chat.length === 0 && <div>{t("common.noData")}</div>}
       </div>
 
       {hasMore && (
         <div className="row" style={{justifyContent:"center", display:'flex', marginTop:8}}>
-          <button className="btn" onClick={()=>setVisiblePosts(v=>v+2)} style={{ padding: '8px 16px', borderRadius: 6, border: '1px solid #ccc', background: '#f0f0f0', cursor: 'pointer', fontWeight: 600 }}>Xem thêm</button>
+          <button className="btn" onClick={()=>setVisiblePosts(v=>v+2)} style={{ padding: '8px 16px', borderRadius: 6, border: '1px solid #ccc', background: '#f0f0f0', cursor: 'pointer', fontWeight: 600 }}>{t("common.loadMore")}</button>
         </div>
       )}
 

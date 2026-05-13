@@ -19,6 +19,7 @@ import {
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import imageCompression from "browser-image-compression";
 import LightboxSwipeOnly from "./LightboxSwipeOnly";
+import { useI18n } from "../i18n/I18nProvider";
 
 const orange = colors.primary;
 const orangeLight = colors.primaryLight;
@@ -77,6 +78,7 @@ function UndoIcon({ size = 20 }) {
 // ===============================================================
 
 function GiamSatNhaRac({ user }) {
+  const { t } = useI18n();
   const [chat, setChat] = useState([]);
   const [text, setText] = useState("");
   const [files, setFiles] = useState([]);
@@ -150,7 +152,7 @@ function GiamSatNhaRac({ user }) {
       return;
     }
     const arr = Array.from(e.target.files);
-    const opt = { maxSizeMB: 3, maxWidthOrHeight: 1920, useWebWorker: true };
+    const opt = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: true };
     try {
       const processed = await Promise.all(
         arr.map((f) =>
@@ -205,11 +207,7 @@ function GiamSatNhaRac({ user }) {
   };
 
   const handleSoftDelete = async (postId) => {
-    if (
-      window.confirm(
-        "Bạn có muốn yêu cầu xóa bài đăng này không? EHS/Admin sẽ xem xét."
-      )
-    ) {
+    if (window.confirm(t("common.confirmDelete"))) {
       const docRef = doc(db, FIRESTORE_COLLECTION, postId);
       await updateDoc(docRef, { pendingDeletion: true });
     }
@@ -219,24 +217,15 @@ function GiamSatNhaRac({ user }) {
     await updateDoc(docRef, { pendingDeletion: false });
   };
   const handlePermanentDelete = async (message) => {
-    if (!window.confirm("Bạn có chắc muốn XÓA VĨNH VIỄN bài đăng này không?"))
-      return;
+    if (!window.confirm(t("common.confirmPermanentDelete"))) return;
     try {
       if (message.images?.length) {
         for (const url of message.images) {
-          try {
-            await deleteObject(ref(storage, url));
-          } catch (error) {
-            if (error.code !== "storage/object-not-found")
-              console.error("Lỗi xóa ảnh:", error);
-          }
+          try { await deleteObject(ref(storage, url)); } catch (error) { if (error.code !== "storage/object-not-found") console.error("Lỗi xóa ảnh:", error); }
         }
       }
       await deleteDoc(doc(db, FIRESTORE_COLLECTION, message.id));
-    } catch (err) {
-      console.error("Lỗi khi xóa vĩnh viễn:", err);
-      alert("Xóa bài đăng thất bại.");
-    }
+    } catch (err) { console.error("Lỗi khi xóa vĩnh viễn:", err); alert(t("common.deleteFailed")); }
   };
 
   const filteredChat = useMemo(() => {
@@ -257,9 +246,7 @@ function GiamSatNhaRac({ user }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <h2 style={{ fontWeight: 700, marginBottom: 16, color: orange, flexShrink: 0 }}>
-        Giám sát nhà rác
-      </h2>
+      <h2 style={{ fontWeight: 700, marginBottom: 16, color: orange, flexShrink: 0 }}>{t("trash.title")}</h2>
 
       <form
         onSubmit={handleSend}
@@ -268,7 +255,7 @@ function GiamSatNhaRac({ user }) {
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="Nhập nội dung giám sát..."
+          placeholder={t("chat.placeholder.monitor")}
           rows={2}
           style={{
             width: "100%",
@@ -302,7 +289,7 @@ function GiamSatNhaRac({ user }) {
               fontWeight: 600,
             }}
           >
-            Ảnh đính kèm
+            {t("common.attach")}
           </label>
           <span
             style={{
@@ -314,7 +301,7 @@ function GiamSatNhaRac({ user }) {
               whiteSpace: "nowrap",
             }}
           >
-            {fileNames.length ? fileNames.join(", ") : "Chưa có ảnh"}
+            {fileNames.length ? fileNames.join(", ") : t("common.noImage")}
           </span>
           <button
             type="submit"
@@ -333,7 +320,7 @@ function GiamSatNhaRac({ user }) {
               opacity: isUploading ? 0.7 : 1,
             }}
           >
-            {isUploading ? "Đang gửi..." : "Gửi"}
+            {isUploading ? t("common.sending") : t("common.send")}
           </button>
         </div>
       </form>
@@ -385,23 +372,21 @@ function GiamSatNhaRac({ user }) {
                 >
                   <b style={{ color: orange, fontSize: 14 }}>
                     {msg.user}{" "}
-                    {msg.pendingDeletion && (
-                      <span style={{ color: "red" }}>(Chờ xóa)</span>
-                    )}
+                    {msg.pendingDeletion && (<span style={{ color: "red" }}>{t("common.pendingDelete")}</span>)}
                   </b>
 
                   <div>
                     {msg.pendingDeletion && (userRole === "admin" || userRole === "ehs") ? (
                       <div style={{ display: "flex", gap: "8px" }}>
                         <button
-                          title="Xác nhận xóa"
+                          title={t("chat.title.confirm.delete")}
                           onClick={() => handlePermanentDelete(msg)}
                           style={{ background: "transparent", border: "none", padding: 4, cursor: "pointer" }}
                         >
                           <CheckIcon />
                         </button>
                         <button
-                          title="Hủy yêu cầu xóa"
+                          title={t("chat.title.cancel.delete")}
                           onClick={() => handleCancelDelete(msg.id)}
                           style={{ background: "transparent", border: "none", padding: 4, cursor: "pointer" }}
                         >
@@ -410,7 +395,7 @@ function GiamSatNhaRac({ user }) {
                       </div>
                     ) : canInitiateDelete && !msg.pendingDeletion ? (
                       <button
-                        title="Yêu cầu xóa"
+                        title={t("chat.title.request.delete")}
                         onClick={() => handleSoftDelete(msg.id)}
                         style={{ background: "transparent", border: "none", padding: 4, cursor: "pointer" }}
                       >
@@ -454,7 +439,7 @@ function GiamSatNhaRac({ user }) {
             </div>
           );
         })}
-        {clippedChat.length === 0 && chat.length === 0 && <div>Chưa có dữ liệu.</div>}
+        {clippedChat.length === 0 && chat.length === 0 && <div>{t("common.noData")}</div>}
       </div>
 
 
@@ -472,7 +457,7 @@ function GiamSatNhaRac({ user }) {
               fontWeight: 600,
             }}
           >
-            Xem thêm
+            {t("common.loadMore")}
           </button>
         </div>
       )}

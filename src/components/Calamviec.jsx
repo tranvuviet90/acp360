@@ -8,8 +8,11 @@ import {
   collection,
   getDocs,
   getDoc,
+  addDoc,
+  serverTimestamp,
 } from "firebase/firestore";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
+import { useI18n } from "../i18n/I18nProvider";
 
 /* ====== UI constants ====== */
 const orange = "#E88E2E";
@@ -119,6 +122,7 @@ const getColorForAssignmentCount = (count) => {
 
 /* ====== Component ====== */
 function CaLamViec({ user, isMobile }) {
+  const { t } = useI18n();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [userShifts, setUserShifts] = useState({});
   const [board, setBoard] = useState(null);
@@ -157,6 +161,7 @@ function CaLamViec({ user, isMobile }) {
         setAllUsers(usersList);
       } catch (error) {
         console.error("Lỗi khi lấy danh sách người dùng:", error);
+        setAllUsers([]); // Không block loading guard dù bị deny
       }
     };
     fetchAllUsers();
@@ -165,33 +170,41 @@ function CaLamViec({ user, isMobile }) {
   useEffect(() => {
     setLoading(true);
     
-    const unsubShifts = onSnapshot(doc(db, "weekly_shifts", weekId), async (docSnap) => {
-      if (docSnap.exists()) {
-        setUserShifts(docSnap.data());
-      } else {
-        const prevDate = new Date(weekDates[0]);
-        prevDate.setDate(prevDate.getDate() - 7);
-        const prevWeekDates = getWeekDates(prevDate);
-        const prevWeekId = `${prevWeekDates[0].getFullYear()}-${getWeekNumber(prevWeekDates[0])}`;
-        
-        const prevDocRef = doc(db, "weekly_shifts", prevWeekId);
-        try {
-          const prevDocSnap = await getDoc(prevDocRef);
-          if (prevDocSnap.exists()) {
-            const prevWeekData = prevDocSnap.data();
-            setUserShifts(prevWeekData); 
-            if (canUpdateShift) { 
-              await setDoc(doc(db, "weekly_shifts", weekId), prevWeekData);
+    const unsubShifts = onSnapshot(
+      doc(db, "weekly_shifts", weekId),
+      async (docSnap) => {
+        if (docSnap.exists()) {
+          setUserShifts(docSnap.data());
+        } else {
+          const prevDate = new Date(weekDates[0]);
+          prevDate.setDate(prevDate.getDate() - 7);
+          const prevWeekDates = getWeekDates(prevDate);
+          const prevWeekId = `${prevWeekDates[0].getFullYear()}-${getWeekNumber(prevWeekDates[0])}`;
+          
+          const prevDocRef = doc(db, "weekly_shifts", prevWeekId);
+          try {
+            const prevDocSnap = await getDoc(prevDocRef);
+            if (prevDocSnap.exists()) {
+              const prevWeekData = prevDocSnap.data();
+              setUserShifts(prevWeekData); 
+              if (canUpdateShift) { 
+                await setDoc(doc(db, "weekly_shifts", weekId), prevWeekData);
+              }
+            } else {
+              setUserShifts({}); 
             }
-          } else {
-            setUserShifts({}); 
+          } catch (error) {
+            console.error("Lỗi khi sao chép lịch tuần trước:", error);
+            setUserShifts({});
           }
-        } catch (error) {
-          console.error("Lỗi khi sao chép lịch tuần trước:", error);
-          setUserShifts({});
         }
+      },
+      (error) => {
+        // Lỗi permission hoặc network — vẫn phải để component render được
+        console.error("Lỗi onSnapshot weekly_shifts:", error);
+        setUserShifts({});
       }
-    });
+    );
 
     const unsubAssignments = onSnapshot(
       doc(db, "weekly_assignments_v6", weekId),
@@ -217,6 +230,12 @@ function CaLamViec({ user, isMobile }) {
         }
 
         setLoading(false);
+      },
+      (error) => {
+        // Lỗi permission hoặc network — tạo board rỗng để tránh React crash
+        console.error("Lỗi onSnapshot weekly_assignments_v6:", error);
+        setBoard(createEmptyBoardForWeek(weekDates));
+        setLoading(false); // QUAN TRỌNG: phải gọi để thoát trạng thái loading
       }
     );
 
@@ -224,7 +243,7 @@ function CaLamViec({ user, isMobile }) {
       unsubShifts();
       unsubAssignments();
     };
-  }, [weekId, canPlanBoard, JSON.stringify(weekDates)]); 
+  }, [weekId, canPlanBoard]); // weekId đã encode đủ thông tin tuần, không cần JSON.stringify(weekDates) 
 
   const handleShiftChange = async (dayId, newShift) => {
     if (!currentUserName || !canUpdateShift) return;
@@ -237,7 +256,7 @@ function CaLamViec({ user, isMobile }) {
       );
     } catch (error) {
       console.error("Lỗi khi cập nhật ca làm việc:", error);
-      alert("Không thể cập nhật ca làm việc. Vui lòng kiểm tra quyền truy cập của bạn.");
+      alert(t("errors.updateShift"));
     }
   };
 
@@ -331,6 +350,25 @@ function CaLamViec({ user, isMobile }) {
         { board: newBoard },
         { merge: true }
       );
+
+      // Gửi thông báo nếu kéo vào bảng phân công
+      if (destIsBoard) {
+        const { shift: dShift, task: dTask } = parseBoardDroppableId(destination.droppableId);
+        try {
+          const targetUserObj = allUsers.find((u) => u.name === draggedItem.name);
+          if (targetUserObj && targetUserObj.id) { // In allUsers, id is the document ID (uid)
+            await addDoc(collection(db, "notifications"), {
+              type: "shift_assign",
+              message: `Bạn được phân công nhiệm vụ "${dTask}" ca ${SHIFTS[dShift] || dShift} ngày ${selectedDate.toLocaleDateString("vi-VN")}.`,
+              targetUserId: targetUserObj.id,
+              readBy: [],
+              timestamp: serverTimestamp()
+            });
+          }
+        } catch (e) {
+          console.error("Lỗi gửi thông báo phân công:", e);
+        }
+      }
     } catch (e) {
       console.error("Lỗi khi lưu phân công:", e);
     }
@@ -354,10 +392,10 @@ function CaLamViec({ user, isMobile }) {
     setSelectedDate(new Date());
   };
 
-  if (loading || !board || allUsers.length === 0) {
+  if (loading || !board) {
     return (
       <div style={{ textAlign: "center", fontWeight: "bold" }}>
-        Đang tải dữ liệu ca làm việc...
+        {t("loading.shifts")}
       </div>
     );
   }
@@ -504,12 +542,12 @@ function CaLamViec({ user, isMobile }) {
   return (
     <div>
       <h2 style={{ fontWeight: 700, color: orange }}>
-        Phân ca & Công việc EHS Committee
+        {t("page.shifts.title")}
       </h2>
 
       <div style={{ background: "#f5f5f5", borderRadius: 8, padding: isMobile ? 10 : 15, marginBottom: 20 }}>
         <h3 style={{ marginTop: 0, fontSize: isMobile ? 16 : 20 }}>
-          Ca làm việc của tôi (Tuần {getWeekNumber(weekDates[0])})
+          {t("shifts.myWeek").replace("{week}", getWeekNumber(weekDates[0]))}
         </h3>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "10px" }}>
           {weekDates.map((day) => {
@@ -525,7 +563,7 @@ function CaLamViec({ user, isMobile }) {
                   disabled={!canUpdateShift}
                   style={{ width: "100%", padding: "8px", borderRadius: 6, border: "1px solid #ccc" }}
                 >
-                  <option value="">-- Chọn ca --</option>
+                  <option value="">{t("shifts.selectShift")}</option>
                   {ALL_SHIFTS_LIST.map((ca) => ( <option key={ca} value={ca}> {ca === "Off" ? "Off" : SHIFTS[ca] || ca} </option> ))}
                 </select>
               </div>
@@ -555,20 +593,19 @@ function CaLamViec({ user, isMobile }) {
       <DragDropContext onDragEnd={onDragEnd} onDragStart={onDragStart}>
         <div style={{ background: "#f5f5f5", borderRadius: 8, padding: isMobile ? 10 : 15, marginBottom: 20 }}>
           <h3 style={{ textAlign: "center", color: dark, marginTop: 0, fontSize: isMobile ? 16 : 20 }}>
-            Ca làm việc (Nhân sự có sẵn)
+            {t("shifts.availableStaff")}
           </h3>
           <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 15, marginBottom: 10, flexWrap: "wrap" }}>
-            <button onClick={handlePreviousWeek} style={{ padding: "8px 12px", fontWeight: "bold" }}> &lt; Tuần trước </button>
+            <button onClick={handlePreviousWeek} style={{ padding: "8px 12px", fontWeight: "bold" }}>{t("nav.prevWeek")}</button>
             <div style={{ fontWeight: "bold", fontSize: 16 }}>
-              Tuần {getWeekNumber(weekDates[0])} ({weekDates[0].toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })}{" "}-{" "}
-              {weekDates[6].toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })})
+              {t("nav.weekRange").replace("{week}", getWeekNumber(weekDates[0])).replace("{from}", weekDates[0].toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })).replace("{to}", weekDates[6].toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" }))}
             </div>
-            <button onClick={handleNextWeek} style={{ padding: "8px 12px", fontWeight: "bold" }}> Tuần sau &gt; </button>
+            <button onClick={handleNextWeek} style={{ padding: "8px 12px", fontWeight: "bold" }}>{t("nav.nextWeek")}</button>
           </div>
           {getWeekNumber(new Date()) !== getWeekNumber(selectedDate) && (
             <div style={{ textAlign: "center", marginBottom: 15 }}>
               <button onClick={goToCurrentWeek} style={{ fontSize: 13, padding: "5px 10px", cursor: "pointer", background: "#e9ecef", border: "1px solid #ccc", borderRadius: 5 }}>
-                Quay về tuần hiện tại
+                {t("nav.backToCurrentWeek")}
               </button>
             </div>
           )}
@@ -635,7 +672,7 @@ function CaLamViec({ user, isMobile }) {
 
         <div style={{ background: "#f5f5f5", borderRadius: 8, padding: isMobile ? 10 : 15, flexGrow: 1 }}>
           <h3 style={{ textAlign: "center", color: dark, marginTop: 0, fontSize: isMobile ? 16 : 20 }}>
-            Bảng phân công ngày: {selectedDate.toLocaleDateString("vi-VN")}
+            {t("board.titleForDay").replace("{date}", selectedDate.toLocaleDateString("vi-VN"))}
           </h3>
           {renderAssignmentBoard()}
         </div>

@@ -8,6 +8,7 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { colors } from '../theme';
 import { useToast } from './LightboxSwipeOnly';
+import { useI18n } from '../i18n/I18nProvider';
 
 /* =========================
  * HẰNG SỐ & HỖ TRỢ CHUNG
@@ -114,30 +115,30 @@ const useLongPress = (callback, onClick, ms = 80) => {
 };
 
 /* --- NumberInput: Ô nhập số với nút +/- cho mobile (memo để giảm re-render) --- */
-const NumberInput = React.memo(function NumberInput({ value, onChange, min = 0, style, placeholder = "Nhập" }) {
+const NumberInput = React.memo(function NumberInput({ value, onChange, itemShift, itemKey, min = 0, style, placeholder = "Nhập" }) {
   const shown = (value === 0 || value === null || value === undefined) ? '' : value;
   const safeVal = Number(value || 0);
 
   const handleInputChange = (e) => {
     const v = e.target.value;
-    if (v === '') return onChange(0);
+    if (v === '') return onChange(itemShift, itemKey, 0);
     const n = parseInt(v, 10);
-    if (!Number.isNaN(n) && n >= min) onChange(n);
+    if (!Number.isNaN(n) && n >= min) onChange(itemShift, itemKey, n);
   };
 
   // Dùng useCallback để luôn lấy giá trị safeVal mới nhất khi gọi từ useLongPress
   const increment = useCallback(() => {
-    onChange(safeVal + 1);
-  }, [safeVal, onChange]);
+    onChange(itemShift, itemKey, safeVal + 1);
+  }, [safeVal, onChange, itemShift, itemKey]);
 
   const decrement = useCallback(() => {
     const newVal = safeVal - 1;
     if (newVal >= min) {
-      onChange(newVal);
+      onChange(itemShift, itemKey, newVal);
     } else if (safeVal > min) {
-      onChange(min);
+      onChange(itemShift, itemKey, min);
     }
-  }, [safeVal, onChange, min]);
+  }, [safeVal, onChange, min, itemShift, itemKey]);
 
   // Truyền các handler cho hook long-press (giữ nút tăng/giảm để tự động nhấn)
   const longPressIncrement = useLongPress(increment, increment, 100);
@@ -191,12 +192,6 @@ const NumberInput = React.memo(function NumberInput({ value, onChange, min = 0, 
         value={shown}
         placeholder={placeholder}
         onChange={handleInputChange}
-        onFocus={(e) => {
-          // Giữ focus khi tap nhanh trên Android (sửa lỗi mất focus)
-          setTimeout(() => {
-            e.target.setSelectionRange?.(0, String(e.target.value || '').length);
-          }, 0);
-        }}
         style={{ width: 80, padding: 6, textAlign: 'center', borderRadius: 8, border: '1px solid #ddd', touchAction: 'manipulation', ...style }}
       />
 
@@ -271,15 +266,18 @@ function DepartmentView({ user, reportData, selectedDateKey }) {
     }
   }, [formData, reportData, buildFormFromReport]);
 
-  if (!formData[SHIFTS[0]]) {
-    return <div>Đang tải form...</div>;
-  }
-
-  // Handler onChange ổn định
-  const makeOnChange = useCallback((shift, key) => (n) => {
+  // ==============================================================
+  // SỬA LỖI REACT #310: Phải khai báo Hook TRƯỚC các lệnh return sớm
+  // ==============================================================
+  const makeOnChange = useCallback((shift, key, n) => {
     if (Number.isNaN(n) || n < 0) return;
     setFormData(prev => ({ ...prev, [shift]: { ...prev[shift], [key]: n } }));
   }, []);
+
+  if (!formData[SHIFTS[0]]) {
+    return <div>Đang tải form...</div>;
+  }
+  // ==============================================================
 
   const saveShift = async (shift) => {
     const docRef = doc(db, 'meal_reports', selectedDateKey);
@@ -382,7 +380,7 @@ function DepartmentView({ user, reportData, selectedDateKey }) {
               {Object.entries(MEAL_TYPES.congNhan).map(([k, label]) => (
                 <div key={k} style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <label>{label}: </label>
-                  <NumberInput value={formData[shift][k]} onChange={makeOnChange(shift, k)} />
+                  <NumberInput value={formData[shift][k]} onChange={makeOnChange} itemShift={shift} itemKey={k} />
                 </div>
               ))}
             </div>
@@ -391,7 +389,7 @@ function DepartmentView({ user, reportData, selectedDateKey }) {
               {Object.entries(MEAL_TYPES.giamSat).map(([k, label]) => (
                 <div key={k} style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <label>{label}: </label>
-                  <NumberInput value={formData[shift][k]} onChange={makeOnChange(shift, k)} />
+                  <NumberInput value={formData[shift][k]} onChange={makeOnChange} itemShift={shift} itemKey={k} />
                 </div>
               ))}
             </div>
@@ -400,7 +398,7 @@ function DepartmentView({ user, reportData, selectedDateKey }) {
               {Object.entries(MEAL_TYPES.tangCa).map(([k, label]) => (
                 <div key={k} style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <label>{label}: </label>
-                  <NumberInput value={formData[shift][k]} onChange={makeOnChange(shift, k)} />
+                  <NumberInput value={formData[shift][k]} onChange={makeOnChange} itemShift={shift} itemKey={k} />
                 </div>
               ))}
             </div>
@@ -618,7 +616,7 @@ function AdminView({ user, reportData, selectedDateKey, onDeptClick, onOpenExpor
     setAdjustedTotals(init);
   }, [summary, reportData]);
 
-  const onAdjust = (shift, key, val) => {
+  const onAdjust = useCallback((shift, key, val) => {
     // Cập nhật giá trị điều chỉnh khi Admin sửa ô input
     if (val === '') {
       setAdjustedTotals(prev => ({ ...prev, [shift]: { ...prev[shift], [key]: 0 } }));
@@ -628,7 +626,7 @@ function AdminView({ user, reportData, selectedDateKey, onDeptClick, onOpenExpor
     if (!Number.isNaN(v) && v >= 0) {
       setAdjustedTotals(prev => ({ ...prev, [shift]: { ...prev[shift], [key]: v } }));
     }
-  };
+  }, []);
 
   const confirmShift = async (shift) => {
     if (!window.confirm(`Xác nhận & gửi ${SHIFT_NAMES[shift]} cho Nhà Ăn?`)) return;
@@ -837,7 +835,7 @@ function AdminView({ user, reportData, selectedDateKey, onDeptClick, onOpenExpor
                             <Delta diff={diff} />
                           </td>
                           <td style={{ padding: 8, border: '1px solid #f0f0f0', textAlign: 'center' }}>
-                            <NumberInput value={adjustedTotals[shift]?.[k] ?? 0} onChange={(n) => onAdjust(shift, k, n)} />
+                            <NumberInput value={adjustedTotals[shift]?.[k] ?? 0} onChange={onAdjust} itemShift={shift} itemKey={k} />
                           </td>
                         </tr>
                       );
@@ -1381,6 +1379,7 @@ function ExportBaoComModal({ onClose }) {
 
 /* --- BaoCom: Component chính --- */
 export default function BaoCom({ user }) {
+  const { t } = useI18n();
   const { pushToast } = useToast();
 
   const [reportData, setReportData] = useState(null);
@@ -1434,6 +1433,12 @@ export default function BaoCom({ user }) {
         });
       }
       prevStatusRef.current = next;
+    },
+    (error) => {
+      // Firestore deny hoặc lỗi mạng → không để loading treo vĩnh viễn
+      console.error("Lỗi onSnapshot meal_reports:", error.code, error.message);
+      setReportData({});
+      setLoading(false);
     });
     return () => unsub();
   }, [selectedDateKey, rawRole, pushToast]);
@@ -1441,7 +1446,7 @@ export default function BaoCom({ user }) {
   // Chọn nội dung giao diện hiển thị tùy theo vai trò người dùng
   let content;
   if (loading) {
-    content = <div>Đang tải dữ liệu báo cơm...</div>;
+    content = <div>{t("loading.meals")}</div>;
   } else if (effectiveRole === 'admin' || effectiveRole === 'ehs') {
     content = <AdminView 
       user={user}
@@ -1463,12 +1468,12 @@ export default function BaoCom({ user }) {
       selectedDateKey={selectedDateKey}
     />;
   } else {
-    content = <div>Vai trò của bạn ({rawRole}) không có quyền truy cập chức năng báo cơm.</div>;
+    content = <div>{t("baoCom.noAccess").replace("{role}", rawRole)}</div>;
   }
 
   return (
     <div>
-      <h2 style={{ fontWeight: 700, marginBottom: 8, color: colors.primary }}>Báo cơm ngày</h2>
+      <h2 style={{ fontWeight: 700, marginBottom: 8, color: colors.primary }}>{t("baoCom.title")}</h2>
       <div style={{ marginBottom: 16 }}>
         <DatePicker
           selected={selectedDate}
