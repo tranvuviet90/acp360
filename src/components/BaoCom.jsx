@@ -215,7 +215,7 @@ const NumberInput = React.memo(function NumberInput({ value, onChange, itemShift
 /* --- DepartmentView: Giao diện bộ phận --- */
 function DepartmentView({ user, reportData, selectedDateKey }) {
   const { pushToast } = useToast();
-  const userRole = user.role;
+  const userRole = Array.isArray(user.role) ? (user.role.find(r => DEPARTMENTS.includes(r)) || user.role[0]) : user.role;
   const [formData, setFormData] = useState({});
 
   // NEW: khóa đồng bộ khi đang gõ + snapshot gần nhất để so sánh sâu
@@ -584,7 +584,7 @@ function AdminView({ user, reportData, selectedDateKey, onDeptClick, onOpenExpor
         [`${recall.shift}.overtimeFulfilled.${recall.dept}.recallPending`]: false,
         history: arrayUnion({
           user: user.name,
-          role: user.role,
+          role: Array.isArray(user.role) ? user.role.join(", ") : user.role,
           action: 'EHS/Admin xác nhận thu hồi tăng ca',
           shift: recall.shift,
           details: `${recall.dept}: Thu hồi ${recall.surplusMi} mì, ${recall.surplusSua} sữa.`,
@@ -680,7 +680,7 @@ function AdminView({ user, reportData, selectedDateKey, onDeptClick, onOpenExpor
     batch.update(docRef, {
       history: arrayUnion({
         user: user.name,
-        role: user.role,
+        role: Array.isArray(user.role) ? user.role.join(", ") : user.role,
         action: 'Xác nhận & gửi cho Nhà Ăn',
         shift,
         details: changes.length ? changes.join(', ') : 'Không điều chỉnh so với tổng.',
@@ -812,7 +812,8 @@ function AdminView({ user, reportData, selectedDateKey, onDeptClick, onOpenExpor
               </span>
             </h3>
 
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 400 }}>
               <thead style={{ background: colors.primaryLight || '#eef5ff' }}>
                 <tr>
                   <th style={{ padding: 8, border: '1px solid #eee' }}>Loại cơm</th>
@@ -843,7 +844,8 @@ function AdminView({ user, reportData, selectedDateKey, onDeptClick, onOpenExpor
                   </React.Fragment>
                 ))}
               </tbody>
-            </table>
+              </table>
+            </div>
 
             <div style={{ marginTop: 10 }}>
               <h4 style={{ margin: '8px 0' }}>Trạng thái bộ phận:</h4>
@@ -1078,7 +1080,8 @@ function CanteenView({ user, reportData, selectedDateKey }) {
                 )}
               </h3>
 
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 400 }}>
                 <thead style={{ background: colors.primaryLight || '#eef5ff' }}>
                   <tr>
                     <th style={{ padding: 8, border: '1px solid #eee' }}>Loại cơm/suất ăn</th>
@@ -1099,7 +1102,8 @@ function CanteenView({ user, reportData, selectedDateKey }) {
                     </React.Fragment>
                   ))}
                 </tbody>
-              </table>
+                </table>
+              </div>
 
               {/* Nút xác nhận lần đầu (chỉ hiện nếu chưa xác nhận) */}
               {!isConfirmed && (
@@ -1387,15 +1391,33 @@ export default function BaoCom({ user }) {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [openDept, setOpenDept] = useState(null);
   const [showExport, setShowExport] = useState(false);
+  // Tab bộ phận hiện tại khi user có nhiều bộ phận
+  const [activeDeptTab, setActiveDeptTab] = useState(0);
 
   const selectedDateKey = dateKey(selectedDate);
   const prevStatusRef = useRef({});
 
-  const rawRole = user?.role || '';
+  const userRoles = user?.role ? (Array.isArray(user?.role) ? user.role.map(r => String(r).toLowerCase()) : [String(user.role).toLowerCase()]) : [];
+  const rawRoles = user?.role ? (Array.isArray(user?.role) ? user.role : [user.role]) : [];
+
+  // Xác định tất cả các role bộ phận mà user có (có thể nhiều hơn 1)
+  const deptRoles = rawRoles.filter(r => DEPARTMENTS.includes(r));
+
   // Nếu user là "EHS Committee" có trường mealDept hợp lệ -> cho phép đại diện bộ phận
-  const isProxy = rawRole.toLowerCase() === 'ehs committee' && user?.mealDept && DEPARTMENTS.includes(user.mealDept);
-  const effectiveRole = isProxy ? user.mealDept : rawRole;
-  const proxyUser = isProxy ? { ...user, role: user.mealDept } : user;
+  const isProxy = userRoles.includes('ehs committee') && user?.mealDept && DEPARTMENTS.includes(user.mealDept);
+
+  // Nếu là proxy (ehs committee với mealDept), thêm mealDept vào danh sách bộ phận nếu chưa có
+  const effectiveDeptRoles = useMemo(() => {
+    if (isProxy && !deptRoles.includes(user.mealDept)) {
+      return [user.mealDept, ...deptRoles];
+    }
+    return deptRoles;
+  }, [isProxy, deptRoles, user?.mealDept]);
+
+  // Role ưu tiên để xác định giao diện chính (admin/ehs/Nhà Ăn)
+  const isAdmin = userRoles.includes('admin') || userRoles.includes('ehs');
+  const isCanteen = rawRoles.includes('Nhà Ăn');
+  const rawRole = rawRoles[0] || '';
 
   // Lắng nghe dữ liệu báo cáo của ngày được chọn (real-time)
   useEffect(() => {
@@ -1417,7 +1439,7 @@ export default function BaoCom({ user }) {
       });
 
       // Nếu người dùng là Admin/EHS: thông báo khi Nhà ăn xác nhận mới một ca
-      if (rawRole === 'admin' || rawRole === 'ehs') {
+      if (isAdmin) {
         SHIFTS.forEach(s => {
           if ((prevStatusRef.current?.[s]?.canteen || false) === false && next[s]?.canteen === true) {
             pushToast(`🍽️ Nhà ăn đã xác nhận ${SHIFT_NAMES[s]}.`, 'success');
@@ -1425,7 +1447,7 @@ export default function BaoCom({ user }) {
         });
       }
       // Nếu người dùng là Nhà Ăn: thông báo khi Admin gửi số liệu mới
-      if (rawRole === 'Nhà Ăn') {
+      if (isCanteen) {
         SHIFTS.forEach(s => {
           if ((prevStatusRef.current?.[s]?.admin || false) === false && next[s]?.admin === true) {
             pushToast(`📨 Đã nhận số liệu ${SHIFT_NAMES[s]} từ Aldila.`, 'info');
@@ -1441,13 +1463,13 @@ export default function BaoCom({ user }) {
       setLoading(false);
     });
     return () => unsub();
-  }, [selectedDateKey, rawRole, pushToast]);
+  }, [selectedDateKey, isAdmin, isCanteen, pushToast]);
 
   // Chọn nội dung giao diện hiển thị tùy theo vai trò người dùng
   let content;
   if (loading) {
     content = <div>{t("loading.meals")}</div>;
-  } else if (effectiveRole === 'admin' || effectiveRole === 'ehs') {
+  } else if (isAdmin) {
     content = <AdminView 
       user={user}
       reportData={reportData}
@@ -1455,24 +1477,66 @@ export default function BaoCom({ user }) {
       onDeptClick={setOpenDept}
       onOpenExport={() => setShowExport(true)}
     />;
-  } else if (effectiveRole === 'Nhà Ăn') {
+  } else if (isCanteen) {
     content = <CanteenView
       user={user}
       reportData={reportData}
       selectedDateKey={selectedDateKey}
     />;
-  } else if (DEPARTMENTS.includes(effectiveRole)) {
-    content = <DepartmentView
-      user={proxyUser}
-      reportData={reportData}
-      selectedDateKey={selectedDateKey}
-    />;
+  } else if (effectiveDeptRoles.length > 0) {
+    // User có 1 hoặc nhiều bộ phận
+    if (effectiveDeptRoles.length === 1) {
+      // Chỉ 1 bộ phận: hiển thị trực tiếp như cũ
+      const deptUser = { ...user, role: effectiveDeptRoles[0] };
+      content = <DepartmentView
+        user={deptUser}
+        reportData={reportData}
+        selectedDateKey={selectedDateKey}
+      />;
+    } else {
+      // Nhiều bộ phận: hiển thị tab nhỏ cho từng bộ phận
+      const currentDept = effectiveDeptRoles[activeDeptTab] || effectiveDeptRoles[0];
+      const deptUser = { ...user, role: currentDept };
+      content = (
+        <div>
+          {/* Tab nhỏ chọn bộ phận */}
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
+            {effectiveDeptRoles.map((dept, idx) => (
+              <button
+                key={dept}
+                onClick={() => setActiveDeptTab(idx)}
+                style={{
+                  padding: '7px 16px',
+                  borderRadius: 20,
+                  border: activeDeptTab === idx ? 'none' : '1px solid #ddd',
+                  background: activeDeptTab === idx ? colors.primary : '#f5f5f5',
+                  color: activeDeptTab === idx ? '#fff' : colors.textPrimary,
+                  fontWeight: activeDeptTab === idx ? 700 : 400,
+                  cursor: 'pointer',
+                  fontSize: 14,
+                  transition: 'all 0.15s',
+                }}
+              >
+                {dept}
+              </button>
+            ))}
+          </div>
+          {/* Render DepartmentView cho bộ phận đang chọn */}
+          <DepartmentView
+            key={currentDept}
+            user={deptUser}
+            reportData={reportData}
+            selectedDateKey={selectedDateKey}
+          />
+        </div>
+      );
+    }
   } else {
     content = <div>{t("baoCom.noAccess").replace("{role}", rawRole)}</div>;
   }
 
   return (
-    <div>
+    <div style={{ width: '100%', overflowX: 'hidden', boxSizing: 'border-box' }}>
       <h2 style={{ fontWeight: 700, marginBottom: 8, color: colors.primary }}>{t("baoCom.title")}</h2>
       <div style={{ marginBottom: 16 }}>
         <DatePicker
