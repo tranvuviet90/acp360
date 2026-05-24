@@ -870,6 +870,8 @@ function GembaCheckList({ user, isMobile, newErrorCounts, setGembaNotifCounts })
     const eventData = { department: dep.name, error: { ...newErrorObject, timestamp: new Date().toLocaleString("vi-VN") }, peopleCount: peopleCount, heSo: heSo, addedBy: user.name, timestamp: serverTimestamp() };
     await addDoc(collection(db, "gemba_events"), eventData);
 
+    const errorTimeSec = newErrorObject.timestamp?.seconds || Math.floor(Date.now() / 1000);
+    const notificationRelatedId = `gemba-${dep.name}-${newErrorObject.code || 'nocode'}-${errorTimeSec}`;
     try {
       await addDoc(collection(db, "notifications"), {
         type: "new_gemba_error",
@@ -877,6 +879,7 @@ function GembaCheckList({ user, isMobile, newErrorCounts, setGembaNotifCounts })
         targetRoles: ["ehs", "admin", "ehs committee"],
         createdBy: user.uid,
         readBy: [],
+        relatedId: notificationRelatedId,
         timestamp: serverTimestamp()
       });
     } catch (e) {
@@ -926,6 +929,27 @@ function GembaCheckList({ user, isMobile, newErrorCounts, setGembaNotifCounts })
             }
           });
         } catch (e) { console.error("Lỗi xóa khỏi gemba_events:", e); }
+
+        // 4. Xóa thông báo liên quan
+        let errorSec = 0;
+        if (errorToDelete.timestamp) {
+          if (typeof errorToDelete.timestamp.seconds === 'number') {
+            errorSec = errorToDelete.timestamp.seconds;
+          } else {
+            const dt = safeTsToDate(errorToDelete.timestamp);
+            if (dt) errorSec = Math.floor(dt.getTime() / 1000);
+          }
+        }
+        const deleteRelatedId = `gemba-${dep.name}-${errorToDelete.code || 'nocode'}-${errorSec}`;
+        try {
+          const qNotif = query(collection(db, "notifications"), where("relatedId", "==", deleteRelatedId));
+          const snapNotif = await getDocs(qNotif);
+          const batchNotif = writeBatch(db);
+          snapNotif.forEach(d => batchNotif.delete(d.ref));
+          await batchNotif.commit();
+        } catch (err) {
+          console.error("Lỗi khi xóa thông báo liên quan:", err);
+        }
     }
   }
   

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { db } from "../firebase";
-import { doc, setDoc, onSnapshot, collection, query, where, getDocs, addDoc, serverTimestamp } from "firebase/firestore";
+import { doc, setDoc, onSnapshot, collection, query, where, getDocs, addDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { useI18n } from "../i18n/I18nProvider";
 import { useConfirm } from "./LightboxSwipeOnly";
 
@@ -56,6 +56,7 @@ function BoDam({ user, isMobile }) {
         message: `Bạn được chỉ định sử dụng ${boDams[idx]}. Hãy vào tab Bộ đàm để chấp nhận.`,
         targetUserId: targetUserId,
         readBy: [],
+        relatedId: `bodam-${idx}-${targetUserId}`,
         timestamp: serverTimestamp()
       });
     } catch (e) { console.error(e); }
@@ -63,10 +64,23 @@ function BoDam({ user, isMobile }) {
 
   async function handleCancelAssign(idx) {
     if (!(await askConfirm("Bạn có chắc muốn hủy chỉ định này không?", "Hủy chỉ định bộ đàm"))) return;
+    const assignedUser = status[idx]?.assignedTo;
     let newStatus = [...status];
     const cur = newStatus[idx];
     newStatus[idx] = { ...cur, assignedTo: null };
     await setDoc(doc(db, "bodam", "status"), { status: newStatus });
+
+    if (assignedUser) {
+      try {
+        const q = query(collection(db, "notifications"), where("relatedId", "==", `bodam-${idx}-${assignedUser.uid}`));
+        const snap = await getDocs(q);
+        const batch = writeBatch(db);
+        snap.forEach(d => batch.delete(d.ref));
+        await batch.commit();
+      } catch (err) {
+        console.error("Lỗi xóa thông báo chỉ định:", err);
+      }
+    }
   }
 
   async function handleAccept(idx) {
@@ -74,6 +88,16 @@ function BoDam({ user, isMobile }) {
     const cur = newStatus[idx];
     newStatus[idx] = { ...cur, checked: true, name: user.name, assignedTo: null };
     await setDoc(doc(db, "bodam", "status"), { status: newStatus });
+
+    try {
+      const q = query(collection(db, "notifications"), where("relatedId", "==", `bodam-${idx}-${user.uid}`));
+      const snap = await getDocs(q);
+      const batch = writeBatch(db);
+      snap.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+    } catch (err) {
+      console.error("Lỗi tự dọn dẹp thông báo:", err);
+    }
   }
 
   async function handleCheck(idx) {

@@ -639,7 +639,7 @@ function TuGemba({ user, isMobile, newLogCounts, setTuGembaNotifCounts }) {
       userId: user.uid, 
       timestamp: serverTimestamp() 
     };
-    await addDoc(collection(db, "tu_gemba_logs"), logData);
+    const logDocRef = await addDoc(collection(db, "tu_gemba_logs"), logData);
     
     try {
       await addDoc(collection(db, "notifications"), {
@@ -648,6 +648,7 @@ function TuGemba({ user, isMobile, newLogCounts, setTuGembaNotifCounts }) {
         targetRoles: ["ehs", "admin", "ehs committee"],
         createdBy: user.uid,
         readBy: [],
+        relatedId: logDocRef.id,
         timestamp: serverTimestamp()
       });
     } catch (e) {
@@ -676,9 +677,32 @@ function TuGemba({ user, isMobile, newLogCounts, setTuGembaNotifCounts }) {
               await deleteObject(ref(storage, logToDelete.improvementImageUrl)); 
             }
             await deleteDoc(doc(db, "tu_gemba_logs", logId));
+
+            // Xóa thông báo liên quan
+            try {
+              const qNotif = query(collection(db, "notifications"), where("relatedId", "==", logId));
+              const snapNotif = await getDocs(qNotif);
+              const batchNotif = writeBatch(db);
+              snapNotif.forEach(d => batchNotif.delete(d.ref));
+              await batchNotif.commit();
+            } catch (err) {
+              console.error("Lỗi khi xóa thông báo liên quan:", err);
+            }
         } catch (error) {
             if (error.code !== 'storage/object-not-found') { console.error("Lỗi khi xóa vĩnh viễn:", error); alert("Đã xảy ra lỗi khi xóa."); } 
-            else { await deleteDoc(doc(db, "tu_gemba_logs", logId)); }
+            else { 
+              await deleteDoc(doc(db, "tu_gemba_logs", logId)); 
+              // Xóa thông báo liên quan
+              try {
+                const qNotif = query(collection(db, "notifications"), where("relatedId", "==", logId));
+                const snapNotif = await getDocs(qNotif);
+                const batchNotif = writeBatch(db);
+                snapNotif.forEach(d => batchNotif.delete(d.ref));
+                await batchNotif.commit();
+              } catch (err) {
+                console.error("Lỗi khi xóa thông báo liên quan:", err);
+              }
+            }
         }
     }
   }
