@@ -944,9 +944,44 @@ function GembaCheckList({ user, isMobile, newErrorCounts, setGembaNotifCounts })
         try {
           const qNotif = query(collection(db, "notifications"), where("relatedId", "==", deleteRelatedId));
           const snapNotif = await getDocs(qNotif);
-          const batchNotif = writeBatch(db);
-          snapNotif.forEach(d => batchNotif.delete(d.ref));
-          await batchNotif.commit();
+          
+          if (!snapNotif.empty) {
+            const batchNotif = writeBatch(db);
+            snapNotif.forEach(d => batchNotif.delete(d.ref));
+            await batchNotif.commit();
+            console.log("Đã xóa thông báo liên quan bằng ID chính xác:", deleteRelatedId);
+          } else {
+            // FALLBACK: Tìm kiếm bằng prefix nếu lệch timestamp
+            console.log("Không tìm thấy thông báo bằng ID chính xác. Đang thử bằng prefix...");
+            const prefix = `gemba-${dep.name}-${errorToDelete.code || 'nocode'}-`;
+            const qPrefix = query(
+              collection(db, "notifications"),
+              where("relatedId", ">=", prefix),
+              where("relatedId", "<", prefix + "\uf8ff")
+            );
+            const snapPrefix = await getDocs(qPrefix);
+            if (!snapPrefix.empty) {
+              const batchNotif = writeBatch(db);
+              let deletedCount = 0;
+              snapPrefix.forEach(d => {
+                const data = d.data();
+                const notifRelatedId = data.relatedId || "";
+                const parts = notifRelatedId.split("-");
+                const notifSec = Number(parts[parts.length - 1]);
+                if (!isNaN(notifSec) && Math.abs(notifSec - errorSec) < 60) {
+                  batchNotif.delete(d.ref);
+                  deletedCount++;
+                } else if (errorToDelete.code?.startsWith("custom-")) {
+                  batchNotif.delete(d.ref);
+                  deletedCount++;
+                }
+              });
+              if (deletedCount > 0) {
+                await batchNotif.commit();
+                console.log(`Đã xóa thành công ${deletedCount} thông báo liên quan bằng cơ chế prefix fallback.`);
+              }
+            }
+          }
         } catch (err) {
           console.error("Lỗi khi xóa thông báo liên quan:", err);
         }
