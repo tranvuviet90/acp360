@@ -13,7 +13,7 @@ import BaoCom from "./components/BaoCom";
 import UserSettings from "./components/UserSettings";
 import UserManager from "./components/UserManager";
 import NotificationBell from "./components/NotificationBell";
-import logo from "./assets/logo.svg";
+import logo from "./assets/logo.png";
 import { auth, db } from "./firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc, collection, query, where, Timestamp, getCountFromServer, setDoc } from "firebase/firestore";
