@@ -146,24 +146,48 @@ function ExportModal({ onClose, departments }) {
     const ws = wb.getWorksheet("Sheet1") || wb.worksheets[0];
     if (!ws) throw new Error("Template CAP.xlsx thiếu Sheet1.");
     
-    const imageColumns = [9, 11, 12, 13, 14]; 
-    imageColumns.forEach(col => ws.getColumn(col).width = 31.29);
-    ws.getColumn(10).width = 31.29;
+    // Explicitly enforce columns widths for 14 columns
+    const widths = [6, 30, 15, 18, 22, 20, 35, 15, 18, 20, 31.29, 31.29, 22, 20];
+    widths.forEach((w, idx) => {
+      ws.getColumn(idx + 1).width = w;
+    });
 
     let rowIndex = 7;
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i];
       const findings = r.note ? `${r.desc}\n\nGhi chú: ${r.note}` : r.desc;
-      ws.getCell(rowIndex, 1).value = i + 1;
-      ws.getCell(rowIndex, 2).value = findings;
-      ws.getCell(rowIndex, 3).value = r.department;
-      ws.getCell(rowIndex, 4).value = r.dateISO;
-      ws.getCell(rowIndex, 5).value = r.addedBy || "";
-      ws.getCell(rowIndex, 6).value = r.responsiblePerson || "";
-      ws.getCell(rowIndex, 7).value = r.completionDate || "";
-      ws.getCell(rowIndex, 8).value = r.progressNotes || "";
-      ws.getCell(rowIndex, 2).alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
       
+      const borderThin = {
+        left: { style: 'thin', color: { auto: true } },
+        right: { style: 'thin', color: { auto: true } },
+        top: { style: 'thin', color: { auto: true } },
+        bottom: { style: 'thin', color: { auto: true } }
+      };
+
+      for (let c = 1; c <= 14; c++) {
+        const cell = ws.getCell(rowIndex, c);
+        cell.border = borderThin;
+        cell.font = { name: 'Times New Roman', size: 11 };
+        if (c === 1 || c === 3 || c === 4 || c === 8 || c === 9 || c === 10) {
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        } else {
+          cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+        }
+      }
+
+      ws.getCell(rowIndex, 1).value = i + 1; // No.
+      ws.getCell(rowIndex, 2).value = findings; // Findings
+      ws.getCell(rowIndex, 3).value = r.dateISO; // Audit date
+      ws.getCell(rowIndex, 4).value = r.addedBy || ""; // Auditor
+      ws.getCell(rowIndex, 5).value = r.department || ""; // Responsible Department
+      ws.getCell(rowIndex, 6).value = ""; // Information Recipient (blank)
+      ws.getCell(rowIndex, 7).value = r.progressNotes || ""; // Corrective Action
+      ws.getCell(rowIndex, 8).value = r.responsiblePerson || ""; // PIC
+      ws.getCell(rowIndex, 9).value = r.completionDate ? "Hoàn thành" : "Đang thực hiện"; // Progress Status
+      ws.getCell(rowIndex, 10).value = r.dueDate || ""; // Estimated Completion Date
+      ws.getCell(rowIndex, 13).value = ""; // EHS Assessment (blank)
+      ws.getCell(rowIndex, 14).value = ""; // Comment (blank)
+
       let imageAdded = false;
       const processImage = async (url, col) => {
         if (!url) return;
@@ -187,12 +211,16 @@ function ExportModal({ onClose, departments }) {
         }
       };
 
-      const imagesToProcess = r.imageUrls || (r.beforeUrl ? [r.beforeUrl] : []);
-      for(let j = 0; j < imagesToProcess.length && j < imageColumns.length; j++) {
-        await processImage(imagesToProcess[j], imageColumns[j]);
+      // Process "Before" picture in Column 11 (K)
+      const beforeUrl = r.beforeUrl || (r.imageUrls && r.imageUrls[0]) || "";
+      if (beforeUrl) {
+        await processImage(beforeUrl, 11);
       }
       
-      if (r.afterUrl) await processImage(r.afterUrl, 10);
+      // Process "After" picture in Column 12 (L)
+      if (r.afterUrl) {
+        await processImage(r.afterUrl, 12);
+      }
 
       if (imageAdded) ws.getRow(rowIndex).height = 125.25;
       rowIndex++;
