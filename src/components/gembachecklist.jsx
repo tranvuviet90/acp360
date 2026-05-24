@@ -804,7 +804,7 @@ function GembaCheckList({ user, isMobile, newErrorCounts, setGembaNotifCounts })
   async function handleAddError() {
     if (!selectedGroup) { alert(t("gemba.alert.selectGroup")); return; }
     if (!isCustomError && !selectedError) { alert(t("gemba.alert.selectError")); return; }
-    if (isCustomError && !note.trim()) { alert(t("gemba.alert.requireNote")); return; }
+    if (!note.trim()) { alert(t("gemba.alert.requireNote")); return; }
     if (imageFiles.length === 0) { alert(t("gemba.alert.requirePhoto")); return; }
 
     // Nếu bật tự sửa và có ghi chú, gọi Gemini để sửa trước
