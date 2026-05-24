@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { collection, query, where, onSnapshot, doc, updateDoc, arrayUnion, writeBatch } from "firebase/firestore";
 import { db } from "../firebase";
 import { colors } from "../theme";
@@ -166,7 +166,8 @@ function ToastPopup({ toast, onDismiss, onNavigate }) {
 }
 
 export default function NotificationBell({ user, setActiveTab }) {
-  const [dbNotifications, setDbNotifications] = useState([]);
+  const [roleNotifications, setRoleNotifications] = useState([]);
+  const [userNotifications, setUserNotifications] = useState([]);
   const [localNotifications, setLocalNotifications] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -178,8 +179,26 @@ export default function NotificationBell({ user, setActiveTab }) {
   const initialLoadRole = useRef(true);
   const initialLoadUser = useRef(true);
 
+  const dbNotifications = useMemo(() => {
+    const combinedMap = new Map();
+    roleNotifications.forEach(n => combinedMap.set(n.id, n));
+    userNotifications.forEach(n => combinedMap.set(n.id, n));
+    return Array.from(combinedMap.values()).sort((a, b) => {
+      const tA = a.timestamp?.seconds || 0;
+      const tB = b.timestamp?.seconds || 0;
+      return tB - tA;
+    });
+  }, [roleNotifications, userNotifications]);
+
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setRoleNotifications([]);
+      setUserNotifications([]);
+      return;
+    }
+
+    initialLoadRole.current = true;
+    initialLoadUser.current = true;
 
     const qRole = query(
       collection(db, "notifications"),
@@ -191,33 +210,19 @@ export default function NotificationBell({ user, setActiveTab }) {
       where("targetUserId", "==", user.uid)
     );
 
-    let notifsMap = new Map();
+    const unsubRole = onSnapshot(qRole, (snap) => {
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setRoleNotifications(list);
 
-    function processNewNotifs(snap, isInitial) {
-      snap.docChanges().forEach(change => {
-        if (change.type === "removed") {
-          notifsMap.delete(change.doc.id);
-        } else {
-          notifsMap.set(change.doc.id, { id: change.doc.id, ...change.doc.data() });
-        }
-      });
-
-      const sorted = Array.from(notifsMap.values()).sort((a, b) => {
-        const tA = a.timestamp?.seconds || 0;
-        const tB = b.timestamp?.seconds || 0;
-        return tB - tA;
-      });
-      setDbNotifications(sorted);
-
-      if (isInitial) {
+      if (initialLoadRole.current) {
         snap.docs.forEach(d => seenIdsRef.current.add(d.id));
+        initialLoadRole.current = false; 
         return;
       }
 
       // Lọc thông báo mới, chưa đọc, và KHÔNG phải do chính mình tạo
-      const newNotifs = snap.docs
-        .filter(d => !seenIdsRef.current.has(d.id))
-        .map(d => ({ id: d.id, ...d.data() }))
+      const newNotifs = list
+        .filter(n => !seenIdsRef.current.has(n.id))
         .filter(n =>
           !(n.readBy || []).includes(user.uid) && // chưa đọc
           n.createdBy !== user.uid                // không phải do mình tạo
@@ -228,18 +233,33 @@ export default function NotificationBell({ user, setActiveTab }) {
         setToastQueue(prev => [...prev, { ...n, toastId: `${n.id}-${Date.now()}` }]);
       });
       
-      // Đảm bảo tất cả ID trong DB (dù đã đọc hay chưa) đều vào sổ để chặn vĩnh viễn
       snap.docs.forEach(d => seenIdsRef.current.add(d.id));
-    }
-
-    const unsubRole = onSnapshot(qRole, (snap) => {
-      processNewNotifs(snap, initialLoadRole.current);
-      initialLoadRole.current = false; 
     }, (err) => console.error("Lỗi Role Notif:", err));
 
     const unsubUser = onSnapshot(qUser, (snap) => {
-      processNewNotifs(snap, initialLoadUser.current);
-      initialLoadUser.current = false; 
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setUserNotifications(list);
+
+      if (initialLoadUser.current) {
+        snap.docs.forEach(d => seenIdsRef.current.add(d.id));
+        initialLoadUser.current = false; 
+        return;
+      }
+
+      // Lọc thông báo mới, chưa đọc, và KHÔNG phải do chính mình tạo
+      const newNotifs = list
+        .filter(n => !seenIdsRef.current.has(n.id))
+        .filter(n =>
+          !(n.readBy || []).includes(user.uid) && // chưa đọc
+          n.createdBy !== user.uid                // không phải do mình tạo
+        );
+
+      newNotifs.forEach(n => {
+        seenIdsRef.current.add(n.id);
+        setToastQueue(prev => [...prev, { ...n, toastId: `${n.id}-${Date.now()}` }]);
+      });
+      
+      snap.docs.forEach(d => seenIdsRef.current.add(d.id));
     }, (err) => console.error("Lỗi User Notif:", err));
 
     return () => {

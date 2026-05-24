@@ -649,6 +649,376 @@ function ImprovementModal({ modalData, onClose, onSave }) {
 }
 
 /* =========================
+   GembaReportDashboard
+   ========================= */
+function GembaReportDashboard({ onClose, departments, allDeptScores, selectedMonth: initialMonth, calcHeSo, isMobile }) {
+  const [tooltip, setTooltip] = useState({ visible: false, x: 0, y: 0, dept: null, side: 'top' });
+  const [activeMonth, setActiveMonth] = useState(initialMonth);
+  const [animated, setAnimated] = useState(false);
+
+  // Trigger grow animation on mount
+  React.useEffect(() => {
+    const t = setTimeout(() => setAnimated(true), 60);
+    return () => clearTimeout(t);
+  }, []);
+
+  // Re-animate when month changes
+  React.useEffect(() => {
+    setAnimated(false);
+    const t = setTimeout(() => setAnimated(true), 60);
+    return () => clearTimeout(t);
+  }, [activeMonth]);
+
+  const calcStats = (month) => departments.map((dept) => {
+    const data = allDeptScores[dept.name] || {};
+    const scores = data.scores || [];
+    const people = data.people !== undefined ? data.people : dept.defaultPeople;
+    const heSo = calcHeSo(people);
+    const monthScores = scores.filter((s) => {
+      const d = s.timestamp instanceof Object && s.timestamp.seconds
+        ? new Date(s.timestamp.seconds * 1000)
+        : (s.timestamp instanceof Date ? s.timestamp : new Date(s.timestamp));
+      return !isNaN(d.getTime()) && d.toISOString().slice(0, 7) === month;
+    });
+    const totalDeduction = monthScores.reduce((sum, e) => sum + (e.isReminder ? 0 : (e.point + heSo) / 2), 0);
+    const remaining = Math.max(0, 100 - totalDeduction);
+    const errorCount = monthScores.filter(e => !e.isReminder).length;
+    const reminderCount = monthScores.filter(e => e.isReminder).length;
+    const groupCounts = {};
+    monthScores.filter(e => !e.isReminder).forEach(e => { groupCounts[e.group] = (groupCounts[e.group] || 0) + 1; });
+    const topGroups = Object.entries(groupCounts).sort((a, b) => b[1] - a[1]).slice(0, 3);
+    return { name: dept.name, remaining, errorCount, reminderCount, heSo, people, topGroups, totalDeduction };
+  });
+
+  // Sort high → low
+  const deptStats = calcStats(activeMonth).sort((a, b) => b.remaining - a.remaining);
+
+  const CHART_H = isMobile ? 180 : 260; // px height of chart area
+  const BAR_MAX = 100;
+
+  const getColors = (score) => {
+    if (score >= 90) return { main: '#1565c0', top: '#5b9bd5', side: '#0d47a1', light: '#e3f0ff', score: '#7ec8ff' };
+    if (score >= 70) return { main: '#f9a825', top: '#fdd835', side: '#e65100', light: '#fff8e1', score: '#ffe082' };
+    return { main: '#c62828', top: '#ef5350', side: '#7f0000', light: '#ffebee', score: '#ff8a80' };
+  };
+
+  const monthLabel = `Tháng ${activeMonth.slice(5, 7)}/${activeMonth.slice(0, 4)}`;
+
+  const handleBarEnter = (e, dept) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const spaceAbove = rect.top;
+    const side = spaceAbove < 220 ? 'bottom' : 'top';
+    setTooltip({ visible: true, x: rect.left + rect.width / 2, y: side === 'top' ? rect.top : rect.bottom, dept, side });
+  };
+
+  // SVG chart constants
+  const n = deptStats.length;
+  const SVG_W = isMobile ? Math.max(320, n * 46) : Math.max(560, n * 72);
+  const SVG_H = isMobile ? 260 : 340;
+  const PAD_L = isMobile ? 30 : 38;   // left for y-axis labels
+  const PAD_R = isMobile ? 10 : 14;
+  const PAD_T = isMobile ? 16 : 20;   // top (for top-face overhang)
+  const PAD_B = isMobile ? 44 : 52;   // bottom for dept labels
+  const RPT_CHART_H = SVG_H - PAD_T - PAD_B;
+  const CHART_W = SVG_W - PAD_L - PAD_R;
+  const RPT_BAR_MAX = 100;
+  const DX = isMobile ? 7 : 10;  // 3D depth x
+  const DY = isMobile ? 4 : 6;   // 3D depth y
+  const slotW = CHART_W / n;
+  const barW = Math.min(isMobile ? 26 : 40, slotW * 0.62);
+
+  // Isometric 3D bar rendered as SVG polygons
+  // origin: bottom-left of front face = (x0, yBase)
+  const Bar3D = ({ x0, yBase, barH, c, score, deptName, idx, onEnter, onLeave }) => {
+    const animDelay = idx * 55;
+    const animId = `gemba-clip-${idx}`;
+    // Front face corners (rect)
+    const fx0 = x0, fy0 = yBase - barH, fx1 = x0 + barW, fy1 = yBase;
+    // Top face parallelogram: front-top-left → shift by (DX, -DY)
+    const tx0 = fx0,       ty0 = fy0;
+    const tx1 = fx1,       ty1 = fy0;
+    const tx2 = fx1 + DX,  ty2 = fy0 - DY;
+    const tx3 = fx0 + DX,  ty3 = fy0 - DY;
+    // Right face: top-right-front → top-right-back → bottom-right-back → bottom-right-front
+    const rx0 = fx1,       ry0 = fy0;
+    const rx1 = fx1 + DX,  ry1 = fy0 - DY;
+    const rx2 = fx1 + DX,  ry2 = yBase - DY;
+    const rx3 = fx1,       ry3 = yBase;
+    const labelY = fy0 + barH / 2;  // vertical centre of front face
+
+    return (
+      <g
+        key={deptName}
+        style={{ cursor: 'pointer' }}
+        onMouseEnter={onEnter}
+        onMouseLeave={onLeave}
+      >
+        <defs>
+          <linearGradient id={`gf${idx}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={c.top} />
+            <stop offset="45%" stopColor={c.main} />
+            <stop offset="100%" stopColor={c.main} />
+          </linearGradient>
+          <clipPath id={animId}>
+            <rect x={fx0 - 1} y={yBase - RPT_CHART_H - DY - 2} width={barW + DX + 4} height={RPT_CHART_H + DY + 4}>
+              {animated && (
+                <animate
+                  attributeName="y"
+                  from={yBase}
+                  to={yBase - RPT_CHART_H - DY - 2}
+                  dur="0.55s"
+                  begin={`${animDelay}ms`}
+                  fill="freeze"
+                  calcMode="spline"
+                  keySplines="0.4 0 0.2 1"
+                />
+              )}
+              {animated && (
+                <animate
+                  attributeName="height"
+                  from="0"
+                  to={RPT_CHART_H + DY + 4}
+                  dur="0.55s"
+                  begin={`${animDelay}ms`}
+                  fill="freeze"
+                  calcMode="spline"
+                  keySplines="0.4 0 0.2 1"
+                />
+              )}
+            </rect>
+          </clipPath>
+        </defs>
+
+        <g clipPath={`url(#${animId})`}>
+          {/* Right side face */}
+          <polygon
+            points={`${rx0},${ry0} ${rx1},${ry1} ${rx2},${ry2} ${rx3},${ry3}`}
+            fill={c.side}
+          />
+          {/* Top face */}
+          <polygon
+            points={`${tx0},${ty0} ${tx1},${ty1} ${tx2},${ty2} ${tx3},${ty3}`}
+            fill={c.top}
+          />
+          {/* Front face */}
+          <rect x={fx0} y={fy0} width={barW} height={barH} fill={`url(#gf${idx})`} />
+        </g>
+
+        {/* Score label — always centred on front face, shown when tall enough */}
+        {barH >= 22 && (
+          <text
+            x={fx0 + barW / 2}
+            y={labelY + (isMobile ? 4 : 5)}
+            textAnchor="middle"
+            fill="#fff"
+            fontWeight="800"
+            fontSize={isMobile ? 9 : 12}
+            fontFamily="sans-serif"
+            style={{ pointerEvents: 'none', userSelect: 'none', textShadow: '0 1px 3px rgba(0,0,0,0.6)' }}
+          >
+            {score}
+          </text>
+        )}
+        {/* Score above bar when bar is too short */}
+        {barH < 22 && (
+          <text
+            x={fx0 + barW / 2}
+            y={fy0 - DY - 4}
+            textAnchor="middle"
+            fill={c.top}
+            fontWeight="800"
+            fontSize={isMobile ? 9 : 11}
+            fontFamily="sans-serif"
+            style={{ pointerEvents: 'none' }}
+          >
+            {score}
+          </text>
+        )}
+
+        {/* Dept name label below baseline */}
+        <text
+          x={fx0 + barW / 2 + DX / 2}
+          y={yBase + (isMobile ? 13 : 16)}
+          textAnchor="middle"
+          fill="#7a9ac8"
+          fontWeight="700"
+          fontSize={isMobile ? 8 : 10}
+          fontFamily="sans-serif"
+          style={{ pointerEvents: 'none' }}
+        >
+          {deptName.length > 8 ? deptName.slice(0, 7) + '…' : deptName}
+        </text>
+      </g>
+    );
+  };
+
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, zIndex: 1100, background: 'rgba(8,16,36,0.78)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: isMobile ? 8 : 24 }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{ background: 'linear-gradient(160deg,#1a2540 0%,#0f1c38 100%)', borderRadius: 22, width: '100%', maxWidth: 940, maxHeight: '94vh', overflowY: 'auto', overflowX: 'hidden', boxShadow: '0 16px 64px rgba(0,0,0,0.55)', padding: isMobile ? '16px 10px 20px' : '28px 36px 32px', position: 'relative' }}>
+
+        {/* Header row */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18, flexWrap: 'wrap', gap: 12 }}>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: isMobile ? 16 : 21, color: '#e8f0fe', letterSpacing: '-0.3px' }}>
+              📊 Báo cáo Gemba — {monthLabel}
+            </div>
+            <div style={{ fontSize: 12, color: '#7b8fba', marginTop: 3 }}>
+              Điểm còn lại · Sắp xếp cao → thấp · Hover cột để xem chi tiết
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <input
+              type="month"
+              value={activeMonth}
+              onChange={e => setActiveMonth(e.target.value)}
+              style={{ padding: '6px 10px', borderRadius: 8, border: '1.5px solid #2e4070', background: '#1e2e54', color: '#c8d8f8', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
+            />
+            <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.08)', border: 'none', fontSize: 18, cursor: 'pointer', color: '#8a9fc8', borderRadius: 8, width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+          </div>
+        </div>
+
+        {/* Legend */}
+        <div style={{ display: 'flex', gap: 18, marginBottom: 20, flexWrap: 'wrap' }}>
+          {[['#1565c0','#5b9bd5','≥ 90 điểm'], ['#f9a825','#fdd835','70–90 điểm'], ['#c62828','#ef5350','< 70 điểm']].map(([c1, c2, label]) => (
+            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: '#8a9fc8' }}>
+              <div style={{ width: 18, height: 13, background: `linear-gradient(135deg,${c2},${c1})`, borderRadius: 3, boxShadow: `2px 2px 0 ${c1}88` }} />
+              {label}
+            </div>
+          ))}
+        </div>
+
+        {/* SVG Chart */}
+        <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 16, padding: '8px 4px 4px', overflowX: 'auto' }}>
+          <svg
+            width={SVG_W}
+            height={SVG_H}
+            viewBox={`0 0 ${SVG_W} ${SVG_H}`}
+            style={{ display: 'block', minWidth: SVG_W }}
+          >
+            {/* Y-axis gridlines & labels */}
+            {[0, 25, 50, 75, 100].map(v => {
+              const gy = PAD_T + RPT_CHART_H - (v / RPT_BAR_MAX) * RPT_CHART_H;
+              return (
+                <g key={v}>
+                  <line
+                    x1={PAD_L} y1={gy}
+                    x2={SVG_W - PAD_R} y2={gy}
+                    stroke={v === 0 ? '#3a4e78' : '#2a3a60'}
+                    strokeWidth={v === 0 ? 1.5 : 1}
+                    strokeDasharray={v === 0 ? '' : '4 4'}
+                  />
+                  <text
+                    x={PAD_L - 5} y={gy + 4}
+                    textAnchor="end"
+                    fill="#4a5e88"
+                    fontSize={isMobile ? 9 : 11}
+                    fontFamily="sans-serif"
+                    fontWeight="600"
+                  >{v}</text>
+                </g>
+              );
+            })}
+
+            {/* Bars */}
+            {deptStats.map((d, idx) => {
+              const c = getColors(d.remaining);
+              const barH = Math.max(4, (d.remaining / RPT_BAR_MAX) * RPT_CHART_H);
+              const yBase = PAD_T + RPT_CHART_H;
+              const xCenter = PAD_L + (idx + 0.5) * slotW;
+              const x0 = xCenter - barW / 2;
+              return (
+                <Bar3D
+                  key={d.name}
+                  x0={x0}
+                  yBase={yBase}
+                  barH={barH}
+                  c={c}
+                  score={d.remaining.toFixed(1)}
+                  deptName={d.name}
+                  idx={idx}
+                  onEnter={(e) => handleBarEnter(e, d)}
+                  onLeave={() => setTooltip(t => ({ ...t, visible: false }))}
+                />
+              );
+            })}
+          </svg>
+        </div>
+
+        {/* Tooltip */}
+        {tooltip.visible && tooltip.dept && (() => {
+          const d = tooltip.dept;
+          const c = getColors(d.remaining);
+          const tipW = 220;
+          const rawLeft = Math.max(tipW / 2 + 8, Math.min(tooltip.x, window.innerWidth - tipW / 2 - 8));
+          return (
+            <div style={{
+              position: 'fixed',
+              left: rawLeft,
+              top: tooltip.side === 'top' ? tooltip.y - 8 : tooltip.y + 8,
+              transform: tooltip.side === 'top' ? 'translate(-50%, -100%)' : 'translate(-50%, 0)',
+              background: 'linear-gradient(160deg,#1e2e58,#152040)',
+              color: '#fff',
+              borderRadius: 14,
+              padding: '14px 18px',
+              width: tipW,
+              zIndex: 9999,
+              boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
+              pointerEvents: 'none',
+              fontSize: 13,
+              lineHeight: 1.65,
+              border: `1.5px solid ${c.main}55`,
+            }}>
+              {/* Coloured top stripe */}
+              <div style={{ height: 4, background: `linear-gradient(90deg,${c.top},${c.main})`, margin: '-14px -18px 10px', borderRadius: '12px 12px 0 0' }} />
+              <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 8, color: '#e8f0fe' }}>{d.name}</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                <span style={{ color: '#7b9bd4' }}>Điểm còn lại</span>
+                <span style={{ fontWeight: 900, fontSize: 16, color: c.score }}>{d.remaining.toFixed(2)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#7b9bd4' }}>Điểm trừ</span>
+                <span style={{ fontWeight: 700, color: '#ff8a80' }}>−{d.totalDeduction.toFixed(2)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#7b9bd4' }}>Số người</span>
+                <span style={{ fontWeight: 600, color: '#c8d8f8' }}>{d.people} <span style={{ color: '#4a6098', fontWeight: 400 }}>(HS {d.heSo})</span></span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#7b9bd4' }}>Lỗi</span>
+                <span style={{ fontWeight: 700, color: d.errorCount > 0 ? '#ff8a80' : '#a5d6a7' }}>{d.errorCount > 0 ? `${d.errorCount} lỗi` : '✓ Không lỗi'}</span>
+              </div>
+              {d.reminderCount > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#7b9bd4' }}>Nhắc nhở</span>
+                  <span style={{ fontWeight: 600, color: '#ffe082' }}>{d.reminderCount}</span>
+                </div>
+              )}
+              {d.topGroups.length > 0 && (
+                <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                  <div style={{ fontSize: 11, color: '#4a6098', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Top vi phạm</div>
+                  {d.topGroups.map(([group, count]) => (
+                    <div key={group} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                      <span style={{ color: '#9ab0d8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 155 }}>• {group}</span>
+                      <span style={{ fontWeight: 700, color: '#fdd835', marginLeft: 4 }}>{count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {d.errorCount === 0 && (
+                <div style={{ marginTop: 8, color: '#a5d6a7', fontWeight: 700, fontSize: 13, textAlign: 'center' }}>🎉 Hoàn hảo tháng này!</div>
+              )}
+            </div>
+          );
+        })()}
+      </div>
+    </div>
+  );
+}
+
+/* =========================
    Component chính GembaCheckList
    ========================= */
 function GembaCheckList({ user, isMobile, newErrorCounts, setGembaNotifCounts }) {
@@ -661,6 +1031,8 @@ function GembaCheckList({ user, isMobile, newErrorCounts, setGembaNotifCounts })
   const [loading, setLoading] = useState(true);
   const [peopleCount, setPeopleCount] = useState(0);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showReportDashboard, setShowReportDashboard] = useState(false);
+  const [allDeptScores, setAllDeptScores] = useState({});
   
   const [imageFiles, setImageFiles] = useState([]);
   const [imageFileNames, setImageFileNames] = useState([]);
@@ -729,6 +1101,21 @@ function GembaCheckList({ user, isMobile, newErrorCounts, setGembaNotifCounts })
   useEffect(() => {
     runCleanup();
   }, []);
+
+  // Load tất cả điểm bộ phận cho dashboard báo cáo
+  useEffect(() => {
+    if (!showReportDashboard) return;
+    const unsubs = departments.map((dept) => {
+      const docRef = doc(db, "gemba_scores", dept.name);
+      return onSnapshot(docRef, (snap) => {
+        setAllDeptScores(prev => ({
+          ...prev,
+          [dept.name]: snap.exists() ? snap.data() : { scores: [], people: dept.defaultPeople }
+        }));
+      });
+    });
+    return () => unsubs.forEach(u => u());
+  }, [showReportDashboard]);
 
   useEffect(() => {
     const run = async () => {
@@ -1060,6 +1447,16 @@ function GembaCheckList({ user, isMobile, newErrorCounts, setGembaNotifCounts })
     <div style={{ display: 'flex', justifyContent: 'center', padding: isMobile ? '10px' : '30px' }}>
       <div style={{ width: '100%', maxWidth: '1600px' }}>
         {showExportModal && <ExportModal onClose={() => setShowExportModal(false)} departments={departments} />}
+        {showReportDashboard && (
+          <GembaReportDashboard
+            onClose={() => setShowReportDashboard(false)}
+            departments={departments}
+            allDeptScores={allDeptScores}
+            selectedMonth={selectedMonth}
+            calcHeSo={calcHeSo}
+            isMobile={isMobile}
+          />
+        )}
         {improvementModal.isOpen && <ImprovementModal modalData={improvementModal} onClose={() => setImprovementModal({ isOpen: false, error: null, index: -1 })} onSave={handleSaveImprovement} />}
 
         {/* Popup xác nhận sửa chính tả */}
@@ -1116,6 +1513,9 @@ function GembaCheckList({ user, isMobile, newErrorCounts, setGembaNotifCounts })
               </div>
               <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
                   <input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} style={{ padding: 8, borderRadius: 6, border: `1px solid ${colors.border}` }} />
+                  <button onClick={() => setShowReportDashboard(true)} style={{ background: '#1565c0', color: colors.white, border: "none", padding: "8px 15px", borderRadius: 6, fontWeight: "bold", cursor: "pointer", marginTop: isMobile ? 10 : 0 }}>
+                    📊 Báo cáo
+                  </button>
                   <button onClick={() => setShowExportModal(true)} style={{ background: colors.success, color: colors.white, border: "none", padding: "8px 15px", borderRadius: 6, fontWeight: "bold", cursor: "pointer", marginTop: isMobile ? 10 : 0 }}>
                    {t("common.export")}
                   </button>

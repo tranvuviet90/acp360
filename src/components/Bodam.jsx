@@ -55,6 +55,7 @@ function BoDam({ user, isMobile }) {
         type: "bodam_assign",
         message: `Bạn được chỉ định sử dụng ${boDams[idx]}. Hãy vào tab Bộ đàm để chấp nhận.`,
         targetUserId: targetUserId,
+        createdBy: user.uid,
         readBy: [],
         relatedId: `bodam-${idx}-${targetUserId}`,
         timestamp: serverTimestamp()
