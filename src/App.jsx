@@ -225,45 +225,62 @@ export default function App() {
         flexDirection: "column",
         alignItems: "center"
       }}>
-        {/* Header */}
+        {/* Top Branding Bar */}
+        <div style={{
+          background: colors.surface,
+          width: "100vw",
+          padding: isMobile ? "10px 16px" : "12px 24px",
+          boxSizing: "border-box",
+          borderBottom: `1px solid ${colors.border}`,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}>
+          <img src={logo} alt="logo" className="app-header-logo" />
+
+          <div className="app-header-right" style={{ color: colors.textPrimary }}>
+            <span style={{ whiteSpace: "nowrap", fontWeight: 600, color: colors.textPrimary }}>
+              {user?.name} {!isMobile && `(${user?.role})`}
+            </span>
+
+            <NotificationBell user={user} setActiveTab={setTab} />
+            <UserSettings user={user} />
+            <LanguageSwitcher />
+
+            <button
+              onClick={handleLogout}
+              title={t("logout")}
+              className="btn-logout"
+              style={{
+                color: colors.primary,
+                borderColor: colors.primaryLight,
+                padding: "6px 12px",
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.background = colors.backgroundLight;
+                e.target.style.borderColor = colors.primary;
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.background = "transparent";
+                e.target.style.borderColor = colors.primaryLight;
+              }}
+            >
+              {t("logout")}
+            </button>
+          </div>
+        </div>
+
+        {/* Sticky Navigation Bar (The Teal Banner) */}
         <div style={{
           position: "sticky",
           top: 0,
           background: colors.primary,
           width: "100vw",
-          boxShadow: `0 2px 12px ${colors.primary}55`,
+          boxShadow: `0 3px 14px ${colors.primary}33`,
           zIndex: 10,
-          padding: isMobile ? "10px 16px" : "10px 24px",
+          padding: "4px 0",
           boxSizing: "border-box"
         }}>
-          <div style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            width: "100%",
-            marginBottom: "10px",
-          }}>
-            <img src={logo} alt="logo" className="app-header-logo" />
-
-            <div className="app-header-right">
-              <span style={{ whiteSpace: "nowrap", fontWeight: 600 }}>
-                {user?.name} {!isMobile && `(${user?.role})`}
-              </span>
-
-              <NotificationBell user={user} setActiveTab={setTab} />
-              <UserSettings user={user} />
-              <LanguageSwitcher />
-
-              <button
-                onClick={handleLogout}
-                title={t("logout")}
-                className="btn-logout"
-              >
-                {t("logout")}
-              </button>
-            </div>
-          </div>
-
           <MagicMenu
             user={user}
             activeTab={tab}
