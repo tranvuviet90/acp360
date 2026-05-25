@@ -1,18 +1,19 @@
-// File: TuGemba.jsx (Phiên bản đã sửa lỗi hoàn chỉnh)
+// File: TuGemba.jsx (Phiên bản đồng bộ logic Gemba, lược bỏ tính điểm, dùng trực tiếp collection tu_gemba_logs để tránh lỗi 403)
 
 import React, { useState, useEffect, useRef } from "react";
 import { db, storage } from "../firebase";
 import {
-  doc, onSnapshot, collection, addDoc, serverTimestamp,
-  query, where, orderBy, getDocs, Timestamp, updateDoc, deleteDoc, writeBatch, setDoc
+  doc, setDoc, onSnapshot, collection, addDoc, serverTimestamp,
+  query, where, getDocs, Timestamp, writeBatch, deleteDoc, getDoc,
+  updateDoc
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import imageCompression from "browser-image-compression";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { colors } from "../theme";
-import LightboxSwipeOnly, { useConfirm } from "./LightboxSwipeOnly";
 import { useI18n } from "../i18n/I18nProvider";
+import LightboxSwipeOnly, { useConfirm } from "./LightboxSwipeOnly";
 import { callAIService } from "../utils/aiAdapter";
 
 /* ====================== BIỂU TƯỢNG (ICON) ====================== */
@@ -26,8 +27,8 @@ function ImprovementIcon({ color = 'currentColor', size = 18 }) {
 
 /* ====================== CẤU HÌNH ====================== */
 const departments = [
-  { name: "Cutting" }, { name: "Rolling" }, { name: "Finishing" }, { name: "Dipping" }, 
-  { name: "Graphics" }, { name: "QC" }, { name: "Warehouse" }, { name: "Arrow" }, 
+  { name: "Cutting" }, { name: "Rolling" }, { name: "Finishing" }, { name: "Dipping" },
+  { name: "Graphics" }, { name: "QC" }, { name: "Warehouse" }, { name: "Arrow" },
   { name: "MTN" }, { name: "ENG" },
 ];
 
@@ -44,7 +45,7 @@ const errorGroups = [
   { group: "Nguyên vật liệu", items: [ { code: "10.1", desc: "Chất cao >1m5 không quấn PE" }, { code: "10.2", desc: "Nguyên liệu không để trên pallet" }, { code: "10.3", desc: "Khiêng vật liệu nặng 1 người" }, { code: "10.4", desc: "Thùng móp bể không thay/ chất lẫn kích thước" }, { code: "10.5", desc: "Không có dây đai chống ngã nguyên liệu" }, { code: "10.6", desc: "Chất hàng không đúng quy định/không gọn" }, { code: "10.7", desc: "Di chuyển VL không dùng dây đai cố định" }, { code: "10.8", desc: "Không cố định cuộn nguyên liệu" }, ] },
   { group: "Hành vi không an toàn", items: [ { code: "11.1", desc: "Cố ý làm hư máy móc thiết bị" }, { code: "11.2", desc: "Cố ý làm hư phương tiện PCCC" }, { code: "11.3", desc: "Leo cao không dùng dây đai" }, { code: "11.4", desc: "Dụng cụ tự chế nguy hiểm" }, { code: "11.5", desc: "Mang bật lửa/thuốc lá nơi dễ cháy" }, { code: "11.6", desc: "Hút thuốc khu vực cấm" }, { code: "11.7", desc: "Cố ý làm mất chức năng an toàn" }, { code: "11.8", desc: "Tự ý đổi thao tác/quy trình/kết cấu" }, { code: "11.9", desc: "Đưa tay vào thiết bị chuyển động" }, { code: "11.10", desc: "Dùng ĐT cá nhân/đeo tai phone khi làm" }, { code: "11.11", desc: "Không cuộn gọn tóc vào nón khi vận hành" }, { code: "11.12", desc: "Phát hiện hư không báo sửa" }, { code: "11.13", desc: "Tự ý tháo cover/che chắn sensor" }, { code: "11.14", desc: "Không hướng dẫn NV mới theo AT" }, { code: "11.15", desc: "Không hướng dẫn giám sát AT nhà thầu" }, { code: "11.16", desc: "Lưu trữ vật nguy hiểm ở tủ cá nhân" }, { code: "11.17", desc: "Vứt rác/khạc nhổ bừa bãi" }, ] },
   { group: "Thái độ hợp tác", items: [ { code: "12.1", desc: "Không hợp tác xử lý an toàn" }, { code: "12.2", desc: "Thái độ đe dọa" }, { code: "12.3", desc: "Đánh người" }, { code: "12.4", desc: "QL không xử lý vi phạm của nhân viên" }, ] },
-  { group: "Khác", items: [ { code: "13.1", desc: "Không có DS NV khu vực nghiêm ngặt" }, { code: "13.2", desc: "Không tuân thủ các quy định an toàn" }, { code: "13.3", desc: "Đồng phục không đúng quy định" }, { code: "13.4", desc: "Thức ăn/ nước uống ở khu vực làm việc" }, { code: "13.5", desc: "Tai nạn lao động" }, ] },
+  { group: "Lỗi Khác", items: [] },
 ];
 
 /* =========================
@@ -144,31 +145,36 @@ function ExportModal({ onClose, departments }) {
       const start = new Date(startDate); start.setHours(0, 0, 0, 0);
       const end = new Date(endDate); end.setHours(23, 59, 59, 999);
 
-      let q = query(
+      let qy = query(
         collection(db, "tu_gemba_logs"),
-        where("timestamp", ">=", start),
-        where("timestamp", "<=", end)
+        where("timestamp", ">=", Timestamp.fromDate(start)),
+        where("timestamp", "<=", Timestamp.fromDate(end))
       );
 
       if (selectedDept !== 'all') {
-        q = query(q, where("department", "==", selectedDept));
+        qy = query(qy, where("department", "==", selectedDept));
       }
-      
-      const snapshot = await getDocs(q);
-      if (snapshot.empty) {
+
+      const eventsSnapshot = await getDocs(qy);
+      if (eventsSnapshot.empty) {
         alert("Không có dữ liệu trong khoảng ngày / bộ phận đã chọn.");
         setIsGenerating(false); return;
       }
       
-      const rows = snapshot.docs.map(doc => {
-          const data = doc.data();
-          const date = safeTsToDate(data.timestamp);
-          return {
-            ...data,
-            dateISO: date ? date.toISOString().slice(0, 10) : "",
-            beforeUrl: data.imageUrl,
-            afterUrl: data.improvementImageUrl,
-          }
+      const rows = [];
+      eventsSnapshot.forEach((docSnap) => {
+        const ev = docSnap.data();
+        const ts = safeTsToDate(ev.timestamp);
+        const dateISO = ts ? ts.toISOString().slice(0, 10) : "";
+
+        rows.push({
+          dateISO,
+          department: ev.department || "",
+          ...ev,
+          beforeUrl: ev.imageUrl || "", 
+          imageUrls: ev.imageUrls || [],
+          afterUrl: ev.improvementImageUrl || "",
+        });
       });
 
       // Sắp xếp các hạng mục từ trên xuống dưới theo bộ phận
@@ -188,7 +194,7 @@ function ExportModal({ onClose, departments }) {
       setIsGenerating(false);
     }
   };
-  
+
   const exportCAP = async (rows, label, department) => {
     const [{ default: ExcelJS }, { saveAs }] = await Promise.all([ import("exceljs"), import("file-saver") ]);
     const resp = await fetch("/templates/CAP.xlsx", { cache: "no-store" });
@@ -208,7 +214,7 @@ function ExportModal({ onClose, departments }) {
     let rowIndex = 7;
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i];
-      const findings = r.note ? `${r.description}\n\nGhi chú: ${r.note}` : r.description;
+      const findings = r.note ? `${r.desc}\n\nGhi chú: ${r.note}` : r.desc;
       
       const borderThin = {
         left: { style: 'thin', color: { auto: true } },
@@ -276,13 +282,13 @@ function ExportModal({ onClose, departments }) {
       ws.getCell(rowIndex, 3).value = r.dateISO; // Audit date
       ws.getCell(rowIndex, 4).value = r.addedBy || ""; // Auditor
       ws.getCell(rowIndex, 5).value = r.department || ""; // Responsible Department
-      ws.getCell(rowIndex, 6).value = r.responsiblePerson || ""; // Information Recipient (Người nhận thông tin)
+      ws.getCell(rowIndex, 6).value = r.responsiblePerson || ""; // Information Recipient
       ws.getCell(rowIndex, 7).value = r.progressNotes || ""; // Corrective Action
       ws.getCell(rowIndex, 8).value = r.responsiblePerson || ""; // PIC
       ws.getCell(rowIndex, 9).value = progressStatus; // Progress Status
       ws.getCell(rowIndex, 10).value = r.dueDate || ""; // Estimated Completion Date
       ws.getCell(rowIndex, 13).value = ""; // EHS Assessment (blank)
-      ws.getCell(rowIndex, 14).value = ehsComment; // Comment (blank)
+      ws.getCell(rowIndex, 14).value = ehsComment; // Comment
 
       let imageAdded = false;
       const processImage = async (url, col) => {
@@ -293,7 +299,7 @@ function ExportModal({ onClose, departments }) {
           const img = new Image();
           await new Promise(resolve => { 
             img.onload = resolve; 
-            img.onerror = resolve; // Continue even if image is invalid
+            img.onerror = resolve; 
             img.src = b64; 
           });
           if (img.width && img.height) {
@@ -307,14 +313,14 @@ function ExportModal({ onClose, departments }) {
         }
       };
 
-      // Process "Before" pictures: first goes to Col 11 (K), subsequent to 15 (O), 16 (P)...
+      // Process "Before" pictures
       const beforeImages = r.imageUrls && r.imageUrls.length > 0 ? r.imageUrls : (r.beforeUrl ? [r.beforeUrl] : []);
       for (let j = 0; j < beforeImages.length; j++) {
         const url = beforeImages[j];
         if (j === 0) {
           await processImage(url, 11); // Column 11 (K)
         } else {
-          const col = 15 + (j - 1); // Column 15 (O), 16 (P), etc.
+          const col = 15 + (j - 1); // Column 15 (O), 16 (P)...
           await processImage(url, col);
         }
       }
@@ -335,10 +341,10 @@ function ExportModal({ onClose, departments }) {
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000 }}>
       <div style={{ background: colors.surface, padding: 22, borderRadius: 12, width: 520, boxShadow: "0 4px 15px rgba(0,0,0,.2)" }}>
-        <h3 style={{ marginTop: 0, color: colors.primary }}>{t("report.export.cap")} (Tự Gemba)</h3>
+        <h3 style={{ marginTop: 0, color: colors.primary }}>Xuất báo cáo CAP (Tự Gemba)</h3>
         <div style={{ display: 'grid', gap: '15px' }}>
           <div>
-            <label style={{ fontWeight: 700, color: colors.textPrimary, display: 'block', marginBottom: 5 }}>{t("report.export.range")}</label>
+            <label style={{ fontWeight: 700, color: colors.textPrimary, display: 'block', marginBottom: 5 }}>Chọn khoảng ngày</label>
             <DatePicker
               selectsRange={true}
               startDate={startDate}
@@ -352,19 +358,17 @@ function ExportModal({ onClose, departments }) {
             />
           </div>
           <div>
-            <label style={{ fontWeight: 700, color: colors.textPrimary, display: 'block', marginBottom: 5 }}>{t("report.export.department")}</label>
+            <label style={{ fontWeight: 700, color: colors.textPrimary, display: 'block', marginBottom: 5 }}>Chọn bộ phận</label>
             <select value={selectedDept} onChange={e => setSelectedDept(e.target.value)} className="date-picker-input">
-              <option value="all">{t("common.all")}</option>
+              <option value="all">Tất cả bộ phận</option>
               {departments.map(dept => <option key={dept.name} value={dept.name}>{dept.name}</option>)}
             </select>
           </div>
         </div>
         <style>{`.date-picker-wrapper{width:100%}.date-picker-input{width:100%;padding:8px;border-radius:6px;border:1px solid ${colors.border};box-sizing:border-box}`}</style>
         <div style={{ display: "flex", gap: 12, marginTop: 20, justifyContent: "flex-end", flexWrap: "wrap" }}>
-          <button onClick={onClose} disabled={isGenerating} style={{ padding: "8px 16px", borderRadius: 6, border: `1px solid ${colors.border}`, background: colors.background, cursor: "pointer" }}>{t("common.cancel")}</button>
-          <button onClick={handleExport} disabled={isGenerating || !startDate || !endDate} style={{ padding: "8px 16px", borderRadius: 6, border: "none", background: "#1f80e0", color: colors.white, fontWeight: 700, cursor: "pointer" }}>
-            {isGenerating ? t("report.processing") : t("report.export.cap")}
-          </button>
+          <button onClick={onClose} disabled={isGenerating} style={{ padding: "8px 16px", borderRadius: 6, border: `1px solid ${colors.border}`, background: colors.background, cursor: "pointer" }}>Hủy</button>
+          <button onClick={handleExport} disabled={isGenerating || !startDate || !endDate} style={{ padding: "8px 16px", borderRadius: 6, border: "none", background: "#1f80e0", color: colors.white, fontWeight: 700, cursor: "pointer" }}>{isGenerating ? "Đang xử lý..." : "Xuất CAP"}</button>
         </div>
       </div>
     </div>
@@ -375,10 +379,10 @@ function ExportModal({ onClose, departments }) {
    CỬA SỔ (MODAL) CẢI THIỆN
    ========================= */
 function ImprovementModal({ modalData, onClose, onSave }) {
-  const [responsiblePerson, setResponsiblePerson] = useState(modalData.log?.responsiblePerson || "");
-  const [dueDate, setDueDate] = useState(modalData.log?.dueDate || "");
-  const [progressNotes, setProgressNotes] = useState(modalData.log?.progressNotes || "");
-  const [completionDate, setCompletionDate] = useState(modalData.log?.completionDate || "");
+  const [responsiblePerson, setResponsiblePerson] = useState(modalData.error?.responsiblePerson || "");
+  const [dueDate, setDueDate] = useState(modalData.error?.dueDate || "");
+  const [progressNotes, setProgressNotes] = useState(modalData.error?.progressNotes || "");
+  const [completionDate, setCompletionDate] = useState(modalData.error?.completionDate || "");
   const [improvementImageFile, setImprovementImageFile] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -390,25 +394,33 @@ function ImprovementModal({ modalData, onClose, onSave }) {
         const processed = file.size > opt.maxSizeMB * 1024 * 1024 ? await imageCompression(file, opt) : file;
         setImprovementImageFile(processed);
       } catch (err) {
-        console.error("Lỗi nén ảnh cải thiện:", err); alert("Đã xảy ra lỗi xử lý ảnh."); setImprovementImageFile(null);
+        console.error("Lỗi nén ảnh cải thiện:", err);
+        alert("Đã xảy ra lỗi xử lý ảnh.");
+        setImprovementImageFile(null);
       }
-    } else { setImprovementImageFile(null); }
+    } else {
+      setImprovementImageFile(null);
+    }
   };
   const handleSave = async () => {
     setIsSaving(true);
-    let imageUrl = modalData.log?.improvementImageUrl || null;
+    let imageUrl = modalData.error?.improvementImageUrl || null;
     if (improvementImageFile) {
       try {
         const imageRef = ref(storage, `tu_gemba_improvement_images/${Date.now()}_${improvementImageFile.name}`);
         await uploadBytes(imageRef, improvementImageFile);
         imageUrl = await getDownloadURL(imageRef);
       } catch (error) {
-        console.error("Lỗi tải ảnh cải thiện: ", error); alert("Tải ảnh cải thiện thất bại!"); setIsSaving(false); return;
+        console.error("Lỗi tải ảnh cải thiện: ", error);
+        alert("Tải ảnh cải thiện thất bại!");
+        setIsSaving(false);
+        return;
       }
     }
     const improvementData = { responsiblePerson, dueDate, progressNotes, completionDate, improvementImageUrl: imageUrl };
-    await onSave(modalData.log.id, improvementData);
-    setIsSaving(false); onClose();
+    await onSave(modalData.logId, improvementData);
+    setIsSaving(false);
+    onClose();
   };
   const inputStyle = { width: '100%', padding: 8, borderRadius: 6, border: `1px solid ${colors.border}`, marginTop: 5, boxSizing: 'border-box' };
   const labelStyle = { fontWeight: 600, color: '#333' };
@@ -416,12 +428,12 @@ function ImprovementModal({ modalData, onClose, onSave }) {
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1001 }}>
       <div style={{ background: colors.surface, padding: 22, borderRadius: 12, width: '90%', maxWidth: 550, boxShadow: "0 4px 15px rgba(0,0,0,.2)" }}>
-        <h3 style={{ marginTop: 0, color: colors.primary, borderBottom: `2px solid ${colors.primaryLight}`, paddingBottom: 10 }}>{t("improve.title")}</h3>
-        <p><b>{t("improve.error")}</b> {modalData.log.description}</p>
+        <h3 style={{ marginTop: 0, color: colors.primary, borderBottom: `2px solid ${colors.primaryLight}`, paddingBottom: 10 }}>Cập nhật Cải thiện & Khắc phục</h3>
+        <p><b>Lỗi:</b> {modalData.error.desc}</p>
         <div style={{ display: 'grid', gap: 12 }}>
-          <div> <label style={labelStyle}>{t("improve.responsible")}</label> <input type="text" value={responsiblePerson} onChange={e => setResponsiblePerson(e.target.value)} style={inputStyle} /> </div>
+          <div> <label style={labelStyle}>Người phụ trách</label> <input type="text" value={responsiblePerson} onChange={e => setResponsiblePerson(e.target.value)} style={inputStyle} /> </div>
           <div>
-            <label style={labelStyle}>{t("improve.dueDate")}</label>
+            <label style={labelStyle}>Ngày dự kiến hoàn thành</label>
             <DatePicker
               selected={dueDate ? parseDateStr(dueDate) : null}
               onChange={(date) => setDueDate(formatDateStr(date))}
@@ -431,9 +443,9 @@ function ImprovementModal({ modalData, onClose, onSave }) {
               customInput={<input style={inputStyle} />}
             />
           </div>
-          <div> <label style={labelStyle}>{t("improve.notes")}</label> <textarea value={progressNotes} onChange={e => setProgressNotes(e.target.value)} style={{...inputStyle, minHeight: 70}} /> </div>
+          <div> <label style={labelStyle}>Ghi chú tiến độ</label> <textarea value={progressNotes} onChange={e => setProgressNotes(e.target.value)} style={{...inputStyle, minHeight: 70}} /> </div>
           <div>
-            <label style={labelStyle}>{t("improve.doneDate")}</label>
+            <label style={labelStyle}>Ngày hoàn thành</label>
             <DatePicker
               selected={completionDate ? parseDateStr(completionDate) : null}
               onChange={(date) => setCompletionDate(formatDateStr(date))}
@@ -444,14 +456,14 @@ function ImprovementModal({ modalData, onClose, onSave }) {
             />
           </div>
           <div>
-            <label style={labelStyle}>{t("improve.images")}</label>
+            <label style={labelStyle}>Ảnh cải thiện</label>
             <input type="file" accept="image/*" onChange={handleImageChange} style={{...inputStyle, padding: 5}} />
-            {modalData.log.improvementImageUrl && !improvementImageFile && (
+            {modalData.error.improvementImageUrl && !improvementImageFile && (
               <div style={{ marginTop: 8 }}>
-                <span style={{ fontSize: 12, color: colors.textSecondary, display: 'block', marginBottom: 4 }}>{t("improve.viewImage")}:</span>
-                <a href={modalData.log.improvementImageUrl} target="_blank" rel="noopener noreferrer">
+                <span style={{ fontSize: 12, color: colors.textSecondary, display: 'block', marginBottom: 4 }}>Ảnh cải thiện đã lưu:</span>
+                <a href={modalData.error.improvementImageUrl} target="_blank" rel="noopener noreferrer">
                   <img
-                    src={modalData.log.improvementImageUrl}
+                    src={modalData.error.improvementImageUrl}
                     alt="Ảnh cải thiện"
                     style={{ maxWidth: '100%', maxHeight: 150, borderRadius: 6, border: `1px solid ${colors.border}`, display: 'block', objectFit: 'contain' }}
                   />
@@ -461,17 +473,16 @@ function ImprovementModal({ modalData, onClose, onSave }) {
           </div>
         </div>
         <div style={{ display: "flex", gap: 12, marginTop: 20, justifyContent: "flex-end" }}>
-          <button onClick={onClose} disabled={isSaving} style={{ padding: "8px 16px", borderRadius: 6, border: `1px solid ${colors.border}`, background: colors.background, cursor: "pointer" }}>{t("common.cancel")}</button>
-          <button onClick={handleSave} disabled={isSaving} style={{ padding: "8px 16px", borderRadius: 6, border: "none", background: colors.primary, color: colors.white, fontWeight: 700, cursor: "pointer" }}> {isSaving ? t("improve.saving") : t("improve.save")} </button>
+          <button onClick={onClose} disabled={isSaving} style={{ padding: "8px 16px", borderRadius: 6, border: `1px solid ${colors.border}`, background: colors.background, cursor: "pointer" }}>Hủy</button>
+          <button onClick={handleSave} disabled={isSaving} style={{ padding: "8px 16px", borderRadius: 6, border: "none", background: colors.primary, color: colors.white, fontWeight: 700, cursor: "pointer" }}> {isSaving ? "Đang lưu..." : "Lưu thay đổi"} </button>
         </div>
       </div>
     </div>
   );
 }
 
-
 /* =========================
-   Component chính Tự Gemba
+   Component chính TuGemba
    ========================= */
 function TuGemba({ user, isMobile, newLogCounts, setTuGembaNotifCounts }) {
   const { t } = useI18n();
@@ -479,19 +490,24 @@ function TuGemba({ user, isMobile, newLogCounts, setTuGembaNotifCounts }) {
   const [depIndex, setDepIndex] = useState(0);
   const [selectedGroup, setSelectedGroup] = useState("");
   const [selectedError, setSelectedError] = useState("");
-  const [logs, setLogs] = useState([]);
+  const [allScores, setAllScores] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showExportModal, setShowExportModal] = useState(false);
   
   const [imageFiles, setImageFiles] = useState([]);
   const [imageFileNames, setImageFileNames] = useState([]);
-  
+
   const [isUploading, setIsUploading] = useState(false);
   const [viewer, setViewer] = useState({ open: false, list: [], index: 0 });
   const [note, setNote] = useState("");
   const fileRef = useRef();
   const [thumbMap, setThumbMap] = useState({});
-  const [improvementModal, setImprovementModal] = useState({ isOpen: false, log: null });
+  const [improvementModal, setImprovementModal] = useState({ isOpen: false, error: null, logId: "" });
+  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
+  
+  const dep = departments[depIndex];
+  const isCustomError = selectedGroup === "Lỗi Khác";
+  const userRole = (user && user.role) ? user.role.toLowerCase() : "";
 
   // === Tự sửa chính tả ===
   const CLOUD_FUNCTION_URL = 'https://askai-zvblqnzylq-as.a.run.app';
@@ -499,47 +515,80 @@ function TuGemba({ user, isMobile, newLogCounts, setTuGembaNotifCounts }) {
   const [isCorrecting, setIsCorrecting] = useState(false);
   const [showCorrectModal, setShowCorrectModal] = useState(false);
   const [correctedNote, setCorrectedNote] = useState("");
-  
-  const dep = departments[depIndex];
-  const userRole = (user && user.role) ? user.role.toLowerCase() : "";
+
+  const scoreList = allScores
+    .filter(score => {
+        const scoreDate = safeTsToDate(score.timestamp);
+        if (!scoreDate) return false;
+        return scoreDate.toISOString().slice(0, 7) === selectedMonth;
+    })
+    .sort((a, b) => {
+        const dateA = safeTsToDate(a.timestamp);
+        const dateB = safeTsToDate(b.timestamp);
+        if (!dateA) return 1; if (!dateB) return -1;
+        return dateB - dateA;
+    });
 
   useEffect(() => {
     if (!dep) return;
     setLoading(true);
-    const q = query( collection(db, "tu_gemba_logs"), where("department", "==", dep.name), orderBy("timestamp", "desc") );
+    const q = query(collection(db, "tu_gemba_logs"), where("department", "==", dep.name));
     const unsub = onSnapshot(q, (snap) => {
-        const deptLogs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        setLogs(deptLogs); 
-        setLoading(false);
+      const logs = [];
+      snap.forEach(d => {
+        logs.push({ id: d.id, ...d.data() });
+      });
+      setAllScores(logs);
+      setLoading(false);
     }, (error) => {
-        console.error("Lỗi khi lấy dữ liệu Tự Gemba:", error);
-        if (error.code === 'failed-precondition') { alert("Lỗi truy vấn: Có thể bạn chưa tạo Index trên Firestore. Vui lòng kiểm tra Console (F12) để xem link tạo tự động."); }
-        setLoading(false);
+      console.warn("Lỗi onSnapshot tu_gemba_logs:", error.code);
+      setAllScores([]);
+      setLoading(false);
     });
     return () => unsub();
   }, [dep]);
 
   useEffect(() => {
+    runCleanup();
+  }, []);
+
+  useEffect(() => {
     const run = async () => {
-      const urls = (logs || []).flatMap(e => e.imageUrls || (e.imageUrl ? [e.imageUrl] : [])).filter(Boolean);
+      const urls = (allScores || []).flatMap(e => e.imageUrls || (e.imageUrl ? [e.imageUrl] : [])).filter(Boolean);
       const tasks = urls.filter(u => !thumbMap[u]).map(async (u) => {
-        const thumb = await makeThumbDataURL(u, 96, 96, 0.55);
-        return [u, thumb];
+        const t = await makeThumbDataURL(u, 96, 96, 0.55);
+        return [u, t];
       });
       if (tasks.length) {
         const pairs = await Promise.all(tasks);
         const next = { ...thumbMap };
-        pairs.forEach(([u, thumb]) => { next[u] = thumb; });
+        pairs.forEach(([u, t]) => { next[u] = t; });
         setThumbMap(next);
       }
     };
     run();
-  }, [logs]);
-
-  useEffect(() => { 
-      runCleanup(); 
-  }, []);
+  }, [allScores]);
   
+  const handleSelectDepartment = (index) => {
+    setDepIndex(index);
+    const departmentName = departments[index].name;
+    if (newLogCounts && newLogCounts[departmentName] > 0) {
+      try {
+        const now = new Date().toISOString();
+        const storageKey = "tuGembaLastSeenTimestamps";
+        const timestamps = JSON.parse(localStorage.getItem(storageKey) || "{}");
+        timestamps[departmentName] = now;
+        localStorage.setItem(storageKey, JSON.stringify(timestamps));
+        if (user && user.uid) {
+          const prefRef = doc(db, "user_prefs", user.uid);
+          setDoc(prefRef, { [storageKey]: timestamps }, { merge: true }).catch(e => console.warn("Lưu prefs lỗi:", e));
+        }
+        const updatedCounts = { ...newLogCounts, [departmentName]: 0 };
+        setTuGembaNotifCounts(updatedCounts);
+      } catch (e) { console.error("Lỗi khi cập nhật localStorage:", e); }
+    }
+  };
+
   const handleImageChange = async (e) => {
     if (e.target.files && e.target.files.length > 0) {
       const files = Array.from(e.target.files);
@@ -556,33 +605,24 @@ function TuGemba({ user, isMobile, newLogCounts, setTuGembaNotifCounts }) {
         setImageFiles(processedFiles);
         setImageFileNames(processedFiles.map(f => f.name));
       } catch (err) {
-        console.error("Lỗi nén ảnh:", err); 
-        alert("Đã xảy ra lỗi xử lý ảnh."); 
+        console.error("Lỗi nén ảnh:", err);
+        alert("Đã xảy ra lỗi xử lý ảnh.");
         setImageFiles([]);
         setImageFileNames([]);
         if (fileRef.current) fileRef.current.value = "";
       }
     } else { 
-      setImageFiles([]);
+      setImageFiles([]); 
       setImageFileNames([]);
     }
   };
 
-  async function handleAddLog() {
-    const hasText = note.trim() !== "";
-    const hasSelection = selectedGroup && selectedError;
-    const hasImages = imageFiles.length > 0;
+  async function handleAddError() {
+    if (!selectedGroup) { alert(t("gemba.alert.selectGroup")); return; }
+    if (!isCustomError && !selectedError) { alert(t("gemba.alert.selectError")); return; }
+    if (!note.trim()) { alert(t("gemba.alert.requireNote")); return; }
+    if (imageFiles.length === 0) { alert(t("gemba.alert.requirePhoto")); return; }
 
-    if (!hasText && !hasSelection) {
-      alert("Vui lòng nhập mô tả lỗi hoặc chọn lỗi từ danh sách.");
-      return;
-    }
-    if (hasSelection && !hasImages) {
-        alert("Vui lòng tải lên ảnh bằng chứng khi đã chọn lỗi cụ thể.");
-        return;
-    }
-
-    // Nếu bật tự sửa và có ghi chú, gọi Gemini/AI để sửa trước
     if (autoCorrect && note.trim()) {
       setIsCorrecting(true);
       try {
@@ -596,7 +636,7 @@ function TuGemba({ user, isMobile, newLogCounts, setTuGembaNotifCounts }) {
           setCorrectedNote(corrected);
           setShowCorrectModal(true);
           setIsCorrecting(false);
-          return; // dừng ở đây, chờ người dùng xác nhận trong popup
+          return;
         }
       } catch (e) {
         console.error("Lỗi sửa chính tả:", e);
@@ -605,57 +645,71 @@ function TuGemba({ user, isMobile, newLogCounts, setTuGembaNotifCounts }) {
       setIsCorrecting(false);
     }
 
-    await doSaveLog(note);
+    await doSaveError(note);
   }
 
-  async function doSaveLog(noteToUse) {
+  async function doSaveError(noteToUse) {
     setIsUploading(true);
-    const hasImages = imageFiles.length > 0;
     let urls = [];
-    if (hasImages) {
-        try {
-          urls = await Promise.all(
-            imageFiles.map(async (file) => {
-              const imageRef = ref(storage, `tu_gemba_images/${Date.now()}_${file.name}`);
-              await uploadBytes(imageRef, file);
-              return await getDownloadURL(imageRef);
-            })
-          );
-        } catch (error) { 
-          console.error("Lỗi tải ảnh: ", error); 
-          alert("Tải ảnh thất bại!");
-          setIsUploading(false); 
-          return;
-        }
+    try {
+      urls = await Promise.all(
+        imageFiles.map(async (file) => {
+          const imageRef = ref(storage, `tu_gemba_images/${Date.now()}_${file.name}`);
+          await uploadBytes(imageRef, file);
+          return await getDownloadURL(imageRef);
+        })
+      );
+    } catch (error) { 
+      console.error("Lỗi tải ảnh: ", error); 
+      alert("Tải ảnh thất bại!");
+      setIsUploading(false); 
+      return;
+    }
+
+    let logData;
+    if (isCustomError) {
+      logData = { 
+        department: dep.name,
+        group: selectedGroup, 
+        code: `custom-${Date.now()}`, 
+        desc: "Lỗi khác", 
+        timestamp: serverTimestamp(), 
+        imageUrls: urls, 
+        note: noteToUse, 
+        addedBy: user.name 
+      };
+    } else {
+      const errors = (errorGroups.find((g) => g.group === selectedGroup) || { items: [] }).items;
+      const err = errors.find((e) => e.code === selectedError);
+      logData = { 
+        department: dep.name,
+        group: selectedGroup, 
+        ...err, 
+        timestamp: serverTimestamp(), 
+        imageUrls: urls, 
+        note: noteToUse, 
+        addedBy: user.name 
+      };
     }
     
-    const logData = { 
-      department: dep.name, 
-      group: selectedGroup || "Khác", 
-      description: selectedError || noteToUse, 
-      note: noteToUse, 
-      imageUrls: urls, 
-      addedBy: user.name, 
-      userId: user.uid, 
-      timestamp: serverTimestamp() 
-    };
-    const logDocRef = await addDoc(collection(db, "tu_gemba_logs"), logData);
-    
+    await addDoc(collection(db, "tu_gemba_logs"), logData);
+
+    const errorTimeSec = Math.floor(Date.now() / 1000);
+    const notificationRelatedId = `tugemba-${dep.name}-${logData.code || 'nocode'}-${errorTimeSec}`;
     try {
       await addDoc(collection(db, "notifications"), {
         type: "new_tu_gemba_error",
-        message: `${user.name} đã thêm lỗi mới tại ${dep.name} (Tự Gemba): ${selectedError || noteToUse}`,
+        message: `${user.name} đã thêm lỗi mới tại ${dep.name} (Tự Gemba): ${logData.desc}`,
         targetRoles: ["ehs", "admin", "ehs committee"],
         createdBy: user.uid,
         readBy: [],
-        relatedId: logDocRef.id,
+        relatedId: notificationRelatedId,
         timestamp: serverTimestamp()
       });
     } catch (e) {
       console.error("Lỗi gửi thông báo:", e);
     }
-    
-    setSelectedGroup(""); 
+
     setSelectedError(""); 
     setImageFiles([]);
     setImageFileNames([]);
@@ -665,112 +719,114 @@ function TuGemba({ user, isMobile, newLogCounts, setTuGembaNotifCounts }) {
   }
 
   async function handleDelete(logId) {
-    const logToDelete = logs.find(log => log.id === logId);
-    if (!logToDelete) return;
-    if (await askConfirm(`Bạn có chắc muốn XÓA VĨNH VIỄN lỗi "${logToDelete.description}" không?`, "Xác nhận xóa lỗi")) {
+    const errorToDelete = allScores.find(s => s.id === logId);
+    if (!errorToDelete) return;
+    if (await askConfirm(`Bạn có chắc muốn XÓA VĨNH VIỄN lỗi "${errorToDelete.desc}" không?`, "Xác nhận xóa lỗi")) {
         try {
-            const images = logToDelete.imageUrls || (logToDelete.imageUrl ? [logToDelete.imageUrl] : []);
-            for (const url of images) {
-              await deleteObject(ref(storage, url));
-            }
-            if (logToDelete.improvementImageUrl) { 
-              await deleteObject(ref(storage, logToDelete.improvementImageUrl)); 
-            }
-            await deleteDoc(doc(db, "tu_gemba_logs", logId));
+          await deleteDoc(doc(db, "tu_gemba_logs", logId));
+        } catch (err) {
+          console.error("Lỗi khi xóa khỏi tu_gemba_logs:", err);
+          alert("Xóa vi phạm thất bại!");
+          return;
+        }
 
-            // Xóa thông báo liên quan
-            try {
-              const qNotif = query(collection(db, "notifications"), where("relatedId", "==", logId));
-              const snapNotif = await getDocs(qNotif);
+        const images = errorToDelete.imageUrls || (errorToDelete.imageUrl ? [errorToDelete.imageUrl] : []);
+        for (const url of images) {
+          try { await deleteObject(ref(storage, url)); } catch (e) { console.error("Lỗi xóa ảnh gốc:", e); }
+        }
+        if (errorToDelete.improvementImageUrl) {
+          try { await deleteObject(ref(storage, errorToDelete.improvementImageUrl)); } catch(e) { console.error("Lỗi xóa ảnh cải thiện:", e); }
+        }
+
+        let errorSec = 0;
+        if (errorToDelete.timestamp) {
+          if (typeof errorToDelete.timestamp.seconds === 'number') {
+            errorSec = errorToDelete.timestamp.seconds;
+          } else {
+            const dt = safeTsToDate(errorToDelete.timestamp);
+            if (dt) errorSec = Math.floor(dt.getTime() / 1000);
+          }
+        }
+        const deleteRelatedId = `tugemba-${dep.name}-${errorToDelete.code || 'nocode'}-${errorSec}`;
+        try {
+          const qNotif = query(collection(db, "notifications"), where("relatedId", "==", deleteRelatedId));
+          const snapNotif = await getDocs(qNotif);
+          
+          if (!snapNotif.empty) {
+            const batchNotif = writeBatch(db);
+            snapNotif.forEach(d => batchNotif.delete(d.ref));
+            await batchNotif.commit();
+          } else {
+            const prefix = `tugemba-${dep.name}-${errorToDelete.code || 'nocode'}-`;
+            const qPrefix = query(
+              collection(db, "notifications"),
+              where("relatedId", ">=", prefix),
+              where("relatedId", "<", prefix + "\uf8ff")
+            );
+            const snapPrefix = await getDocs(qPrefix);
+            if (!snapPrefix.empty) {
               const batchNotif = writeBatch(db);
-              snapNotif.forEach(d => batchNotif.delete(d.ref));
-              await batchNotif.commit();
-            } catch (err) {
-              console.error("Lỗi khi xóa thông báo liên quan:", err);
-            }
-        } catch (error) {
-            if (error.code !== 'storage/object-not-found') { console.error("Lỗi khi xóa vĩnh viễn:", error); alert("Đã xảy ra lỗi khi xóa."); } 
-            else { 
-              await deleteDoc(doc(db, "tu_gemba_logs", logId)); 
-              // Xóa thông báo liên quan
-              try {
-                const qNotif = query(collection(db, "notifications"), where("relatedId", "==", logId));
-                const snapNotif = await getDocs(qNotif);
-                const batchNotif = writeBatch(db);
-                snapNotif.forEach(d => batchNotif.delete(d.ref));
+              let deletedCount = 0;
+              snapPrefix.forEach(d => {
+                const data = d.data();
+                const notifRelatedId = data.relatedId || "";
+                const parts = notifRelatedId.split("-");
+                const notifSec = Number(parts[parts.length - 1]);
+                if (!isNaN(notifSec) && Math.abs(notifSec - errorSec) < 60) {
+                  batchNotif.delete(d.ref);
+                  deletedCount++;
+                } else if (errorToDelete.code?.startsWith("custom-")) {
+                  batchNotif.delete(d.ref);
+                  deletedCount++;
+                }
+              });
+              if (deletedCount > 0) {
                 await batchNotif.commit();
-              } catch (err) {
-                console.error("Lỗi khi xóa thông báo liên quan:", err);
               }
             }
+          }
+        } catch (err) {
+          console.error("Lỗi khi xóa thông báo liên quan:", err);
         }
     }
   }
   
   const handleSaveImprovement = async (logId, improvementData) => {
-    const logRef = doc(db, "tu_gemba_logs", logId);
-    const logSnap = await getDoc(logRef);
-    let newDueDateHistory = [];
-    if (logSnap.exists()) {
-      const data = logSnap.data();
-      const oldDueDate = data.dueDate || "";
-      newDueDateHistory = data.dueDateHistory || [];
-      if (improvementData.dueDate && oldDueDate && improvementData.dueDate !== oldDueDate) {
-        const todayStr = new Date().toLocaleDateString("vi-VN");
-        const changeMsg = `Gia hạn lần ${newDueDateHistory.length + 1}: ${oldDueDate.split('-').reverse().join('/')} -> ${improvementData.dueDate.split('-').reverse().join('/')} vào ngày ${todayStr}`;
-        newDueDateHistory.push(changeMsg);
-      }
+    const errorToUpdate = allScores.find(s => s.id === logId);
+    if (!errorToUpdate) return;
+
+    const oldDueDate = errorToUpdate.dueDate || "";
+    let newDueDateHistory = errorToUpdate.dueDateHistory || [];
+    if (improvementData.dueDate && oldDueDate && improvementData.dueDate !== oldDueDate) {
+      const todayStr = new Date().toLocaleDateString("vi-VN");
+      const changeMsg = `Gia hạn lần ${newDueDateHistory.length + 1}: ${oldDueDate.split('-').reverse().join('/')} -> ${improvementData.dueDate.split('-').reverse().join('/')} vào ngày ${todayStr}`;
+      newDueDateHistory.push(changeMsg);
     }
-    await updateDoc(logRef, {
+
+    const docRef = doc(db, "tu_gemba_logs", logId);
+    await updateDoc(docRef, {
       ...improvementData,
       dueDateHistory: newDueDateHistory
     });
   };
   
-  const handleSelectDepartment = (index) => {
-    setDepIndex(index);
-    const departmentName = departments[index].name;
-
-    if (newLogCounts && newLogCounts[departmentName] > 0) {
-      try {
-        const now = new Date().toISOString();
-        const storageKey = "tuGembaLastSeenTimestamps";
-        const timestamps = JSON.parse(localStorage.getItem(storageKey) || "{}");
-        timestamps[departmentName] = now;
-        localStorage.setItem(storageKey, JSON.stringify(timestamps));
-        // Đồng bộ lên Firestore để cross-device
-        if (user && user.uid) {
-          const prefRef = doc(db, "user_prefs", user.uid);
-          setDoc(prefRef, { [storageKey]: timestamps }, { merge: true }).catch(e => console.warn("Lưu prefs lỗi:", e));
-        }
-        const updatedCounts = { ...newLogCounts, [departmentName]: 0 };
-        setTuGembaNotifCounts(updatedCounts);
-        
-      } catch (e) {
-        console.error("Lỗi khi cập nhật localStorage:", e);
-      }
-    }
-  };
-
   const ActionButton = ({ onClick, title, children, color = "#555", bg = "#f0f0f0" }) => (
     <button onClick={onClick} title={title} style={{ border: `1px solid ${color === colors.white ? 'transparent' : color}`, background: bg, color: color, borderRadius: '50%', width: 28, height: 28, cursor: 'pointer', fontWeight: 800, fontSize: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', margin: '0 2px', lineHeight: 1, padding: 0 }}>
       {children}
     </button>
   );
 
-  // ====================== LOGIC XEM ẢNH MỚI ======================
   const openViewer = (list, index = 0) => setViewer({ open: true, list, index });
   const closeViewer = () => setViewer({ open: false, list: [], index: 0 });
   const goPrev = () => setViewer(v => ({ ...v, index: (v.index - 1 + v.list.length) % v.list.length }));
   const goNext = () => setViewer(v => ({ ...v, index: (v.index + 1) % v.list.length }));
-  // ================================================================
 
   return (
     <div style={{ display: 'flex', justifyContent: 'center', padding: isMobile ? '10px' : '30px' }}>
       <div style={{ width: '100%', maxWidth: '1600px' }}>
         {showExportModal && <ExportModal onClose={() => setShowExportModal(false)} departments={departments} />}
-        {improvementModal.isOpen && <ImprovementModal modalData={improvementModal} onClose={() => setImprovementModal({ isOpen: false, log: null })} onSave={handleSaveImprovement} />}
-        
+        {improvementModal.isOpen && <ImprovementModal modalData={improvementModal} onClose={() => setImprovementModal({ isOpen: false, error: null, logId: "" })} onSave={handleSaveImprovement} />}
+
         {/* Popup xác nhận sửa chính tả */}
         {showCorrectModal && (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1002 }}>
@@ -788,13 +844,13 @@ function TuGemba({ user, isMobile, newLogCounts, setTuGembaNotifCounts }) {
               </div>
               <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                 <button
-                  onClick={async () => { setShowCorrectModal(false); await doSaveLog(note); }}
+                  onClick={async () => { setShowCorrectModal(false); await doSaveError(note); }}
                   style={{ padding: '8px 18px', borderRadius: 8, border: `1px solid ${colors.border}`, background: '#f5f5f5', cursor: 'pointer', fontWeight: 600, fontSize: 14 }}
                 >
                   Dùng bản gốc
                 </button>
                 <button
-                  onClick={async () => { setShowCorrectModal(false); await doSaveLog(correctedNote); }}
+                  onClick={async () => { setShowCorrectModal(false); await doSaveError(correctedNote); }}
                   style={{ padding: '8px 22px', borderRadius: 8, border: 'none', background: '#2e7d32', color: '#fff', cursor: 'pointer', fontWeight: 700, fontSize: 14 }}
                 >
                   ✓ Dùng bản đã sửa
@@ -803,24 +859,29 @@ function TuGemba({ user, isMobile, newLogCounts, setTuGembaNotifCounts }) {
             </div>
           </div>
         )}
-
-        {/* SỬ DỤNG LIGHTBOX MỚI */}
+        
         <LightboxSwipeOnly
-            open={viewer.open}
-            list={viewer.list}
-            index={viewer.index}
-            onClose={closeViewer}
-            onPrev={goPrev}
-            onNext={goNext}
+          open={viewer.open}
+          list={viewer.list}
+          index={viewer.index}
+          onClose={closeViewer}
+          onPrev={goPrev}
+          onNext={goNext}
         />
-
+ 
         <div style={{ display: "flex", flexDirection: isMobile ? 'column' : 'row', alignItems: "flex-start", gap: 32, width: "100%" }}>
           <div style={{ flex: "1 1 auto", minWidth: 270, order: isMobile ? 2 : 1 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap" }}>
-              <h2 style={{ color: colors.primary, marginTop: 0 }}>Tự Gemba: {dep.name}</h2>
-              <button onClick={() => setShowExportModal(true)} style={{ background: "#1f80e0", color: colors.white, border: "none", padding: "8px 15px", borderRadius: 6, fontWeight: "bold", cursor: "pointer", marginTop: isMobile ? 10 : 0 }}> {t("report.export.cap")} </button>
+              <div style={{ fontWeight: 700, fontSize: isMobile ? 16 : 18, color: colors.primary }}>
+                Tự Gemba: {departments[depIndex].name}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} style={{ padding: 8, borderRadius: 6, border: `1px solid ${colors.border}` }} />
+                  <button onClick={() => setShowExportModal(true)} style={{ background: "#1f80e0", color: colors.white, border: "none", padding: "8px 15px", borderRadius: 6, fontWeight: "bold", cursor: "pointer", marginTop: isMobile ? 10 : 0 }}>
+                    {t("report.export.cap")}
+                  </button>
+              </div>
             </div>
-            
             <div style={{ marginBottom: 15 }}>
                 <div style={{ fontSize: 15, color: colors.textPrimary, marginBottom: 5 }}>{t("gemba.group.label")}</div>
                 <select value={selectedGroup} onChange={(e) => { setSelectedGroup(e.target.value); setSelectedError(""); }} style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: `1.5px solid ${colors.primaryLight}`, fontSize: 15 }}>
@@ -828,20 +889,27 @@ function TuGemba({ user, isMobile, newLogCounts, setTuGembaNotifCounts }) {
                 {errorGroups.map((g) => <option key={g.group} value={g.group}>{g.group}</option>)}
                 </select>
             </div>
-            {selectedGroup && (
-                <div style={{ marginBottom: 15 }}>
-                    <div style={{ fontSize: 15, color: colors.textPrimary, marginBottom: 5 }}>{t("gemba.error.label")}</div>
-                    <select value={selectedError} onChange={(e) => setSelectedError(e.target.value)} style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: `1.5px solid ${colors.primaryLight}`, fontSize: 15 }}>
-                    <option value="">{t("gemba.error.placeholder")}</option>
-                    {(errorGroups.find(g => g.group === selectedGroup)?.items || []).map(e => <option key={e.code} value={e.desc}>{e.desc}</option> )}
-                    </select>
+            {!isCustomError && selectedGroup && (
+              <div style={{ marginBottom: 15 }}>
+                  <div style={{ fontSize: 15, color: colors.textPrimary, marginBottom: 5 }}>{t("gemba.error.label")}</div>
+                  <select value={selectedError} onChange={(e) => setSelectedError(e.target.value)} style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: `1.5px solid ${colors.primaryLight}`, fontSize: 15 }}>
+                  <option value="">{t("gemba.error.placeholder")}</option>
+                  {(errorGroups.find(g => g.group === selectedGroup)?.items || []).map(e => <option key={e.code} value={e.code}>{e.code} - {e.desc}</option>)}
+                  </select>
+              </div>
+            )}
+            {isCustomError && (
+                <div style={{ border: `1.5px solid ${colors.primaryLight}`, borderRadius: 8, padding: 15, marginBottom: 15 }}>
+                     <div style={{ fontSize: 15, color: colors.textPrimary, fontWeight: 700, marginBottom: 10 }}>{t("gemba.custom.detail")}</div>
+                    <div style={{ fontSize: 14, color: "#666" }}>
+                      Vui lòng nhập chi tiết lỗi phát hiện ở phần ghi chú bên dưới và tải lên ảnh bằng chứng.
+                    </div>
                 </div>
             )}
             <div style={{ marginBottom: 8 }}>
-                 <div style={{ fontSize: 15, color: colors.textPrimary, marginBottom: 5 }}>{t("gemba.note.label")}</div>
-                <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("gemba.note.custom.placeholder")} style={{ width: "100%", minHeight: 60, boxSizing: "border-box", padding: "8px 12px", borderRadius: 8, border: `1.5px solid ${colors.primaryLight}`, fontSize: 15, fontFamily: "sans-serif" }} />
+                <div style={{ fontSize: 15, color: colors.textPrimary, marginBottom: 5 }}>{t("gemba.note.label")}</div>
+                <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder={isCustomError ? t("gemba.note.custom.placeholder") : t("gemba.note.placeholder")} style={{ width: "100%", minHeight: 60, boxSizing: "border-box", padding: "8px 12px", borderRadius: 8, border: `1.5px solid ${colors.primaryLight}`, fontSize: 15, fontFamily: "sans-serif" }} />
             </div>
-
             {/* Checkbox tự sửa chính tả */}
             <div style={{ display: 'flex', gap: 20, marginBottom: 18, flexWrap: 'wrap' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }}>
@@ -852,64 +920,55 @@ function TuGemba({ user, isMobile, newLogCounts, setTuGembaNotifCounts }) {
                   style={{ width: 16, height: 16, accentColor: colors.primary, cursor: 'pointer' }}
                 />
                 <span style={{ fontSize: 14, color: colors.textPrimary, fontWeight: 500 }}>
-                  {t("gemba.autoCorrect") || "Tự sửa lỗi chính tả bằng AI"}
+                  {t("gemba.autoCorrect")}
                 </span>
               </label>
             </div>
-            
-            <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 24, flexWrap: "wrap" }}>
+
+            <div style={{ marginBottom: 24, display: 'flex', alignItems: 'center', gap: 10, flexWrap: "wrap" }}>
                 <input id="imageUploadTuGemba" type="file" accept="image/*" onChange={handleImageChange} ref={fileRef} style={{ display: 'none' }} multiple />
                 <label htmlFor="imageUploadTuGemba" style={{background: 'white', color: colors.primary, border: `1.2px solid ${colors.primaryLight}`, borderRadius: 8, padding: '8px 15px', cursor: 'pointer', fontWeight: 600}}>
-                    {t("gemba.attach", {count: imageFiles.length}).replace("{count}", imageFiles.length)}
+                    {t("gemba.attach", { count: imageFiles.length }).replace("{count}", imageFiles.length)}
                 </label>
                 <span style={{fontStyle: 'italic', fontSize: 14, color: '#555', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
                     {imageFileNames.length > 0 ? imageFileNames.join(', ') : t("common.noImage")}
                 </span>
-                <button onClick={handleAddLog} disabled={isUploading || isCorrecting} style={{ marginLeft: 'auto', height: 38, background: isCorrecting ? '#888' : colors.primary, color: colors.white, borderRadius: 9, border: "none", padding: "0 26px", fontWeight: 700, fontSize: 16, cursor: "pointer", opacity: (isUploading || isCorrecting) ? 0.6 : 1 }}>
-                     {isCorrecting ? (t("gemba.correcting") || "Đang sửa...") : isUploading ? t("gemba.uploading") : t("gemba.add")}
+                <button onClick={handleAddError} disabled={isUploading || isCorrecting} style={{ marginLeft: 'auto', height: 38, background: isCorrecting ? '#888' : colors.primary, color: colors.white, borderRadius: 9, border: "none", padding: "0 26px", fontWeight: 700, fontSize: 16, cursor: "pointer", opacity: (isUploading || isCorrecting) ? 0.7 : 1 }}>
+                    {isCorrecting ? t("gemba.correcting") : isUploading ? t("gemba.uploading") : t("gemba.add")}
                 </button>
             </div>
-
-            <hr style={{border: 'none', borderTop: `1px solid ${colors.primaryLight}`, margin: '30px 0'}} />
             
             {loading ? <div>{t("gemba.loading")}</div> : (
               isMobile ? (
                 <div style={{ display: 'grid', gap: 12 }}>
-                  {logs.length > 0 ? logs.map((log) => {
-                    const images = log.imageUrls || (log.imageUrl ? [log.imageUrl] : []);
-                    const isImproved = log.completionDate && log.improvementImageUrl;
+                  {scoreList.length > 0 ? scoreList.map((e) => {
+                    const images = e.imageUrls || (e.imageUrl ? [e.imageUrl] : []);
+                    const isImproved = e.completionDate && e.improvementImageUrl;
                     return (
-                      <div key={log.id} style={{ border: '1.2px solid ' + colors.primaryLight, borderRadius: 12, padding: 12, background: colors.surface, boxShadow: `0 1.5px 10px ${colors.primary}11` }}>
+                      <div key={e.id} style={{ border: '1.2px solid ' + colors.primaryLight, borderRadius: 12, padding: 12, background: colors.surface, boxShadow: `0 1.5px 10px ${colors.primary}11` }}>
                         <div style={{ display:'flex', justifyContent:'space-between', gap:8, flexWrap:'wrap' }}>
-                          <div style={{ fontSize: 12, color: colors.textSecondary }}>{safeTsToDate(log.timestamp)?.toLocaleString('vi-VN')}</div>
-                          <div style={{ fontWeight: 700, color: colors.primary }}>{log.group}</div>
+                          <div style={{ fontSize: 12, color: colors.textSecondary }}>{safeTsToDate(e.timestamp)?.toLocaleString('vi-VN')}</div>
+                          <div style={{ fontWeight: 700, color: colors.primary }}>{e.group}</div>
                         </div>
                         <div style={{ marginTop: 6, overflowWrap:'anywhere' }}>
-                          {log.description}
-                          {log.addedBy && <div style={{fontSize: 11, color: colors.textSecondary, fontStyle:'italic'}}>{t("gemba.by")} {log.addedBy}</div>}
+                          {e.group === 'Lỗi Khác' ? 'Lỗi khác' : e.desc}
+                          {e.addedBy && <div style={{fontSize: 11, color: colors.textSecondary, fontStyle:'italic'}}>{t("gemba.by")} {e.addedBy}</div>}
                         </div>
                         {images.length > 0 && (
-                          <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                            {images.map((img, index) => (
-                               <div key={index} style={{ position:'relative', display:'inline-block', cursor:'pointer' }} onClick={() => openViewer(images, index)}>
-                                <img src={thumbMap[img] || img} alt={`ảnh lỗi ${index + 1}`} style={{ width: 56, height: 56, borderRadius: 6, objectFit:'cover' }}/>
-                                {images.length > 1 && index === 0 && (
-                                  <span style={{ position:'absolute', top:-6, right:-6, background:'rgba(0,0,0,0.7)', color:'#fff', borderRadius:'50%', width:20, height:20, fontSize:12, display:'flex', alignItems:'center', justifyContent:'center' }}>+{images.length-1}</span>
-                                )}
-                              </div>
-                            ))}
+                          <div style={{ marginTop: 8 }}>
+                            <div style={{ position:'relative', display:'inline-block', cursor:'pointer' }} onClick={() => openViewer(images, 0)}>
+                              <img src={thumbMap[images[0]] || images[0]} alt="ảnh lỗi" style={{ width: 56, height: 56, borderRadius: 6, objectFit:'cover' }}/>
+                              {images.length > 1 && (
+                                <span style={{ position:'absolute', top:-6, right:-6, background:'rgba(0,0,0,0.7)', color:'#fff', borderRadius:'50%', width:20, height:20, fontSize:12, display:'flex', alignItems:'center', justifyContent:'center' }}>+{images.length-1}</span>
+                              )}
+                            </div>
                           </div>
                         )}
-                        <div style={{ marginTop: 8, display:'flex', justifyContent:'space-between', alignItems:'center', gap:8 }}>
-                          <div>
-                            {log.note && <button onClick={() => alert(`Ghi chú:\n\n${log.note}`)} style={{ border:'none', background:'transparent', fontSize:22, cursor:'pointer' }} title="Xem ghi chú">🗒️</button>}
-                          </div>
-                          <div style={{ display:'flex', alignItems:'center' }}>
-                            <ActionButton onClick={() => setImprovementModal({ isOpen: true, log: log })} title={t("gemba.improve.action")} color={colors.white} bg={isImproved ? '#4caf50' : '#f44336'}><ImprovementIcon /></ActionButton>
-                            {(userRole === 'admin' || userRole === 'ehs') && (
-                              <ActionButton onClick={() => handleDelete(log.id)} title={t("gemba.delete.action")} color="#d32f2f" bg="transparent">x</ActionButton>
-                            )}
-                          </div>
+                        <div style={{ marginTop: 8, display:'flex', justifyContent:'flex-end', gap:6, alignItems:'center' }}>
+                          <ActionButton onClick={() => setImprovementModal({ isOpen: true, error: e, logId: e.id })} title={t("gemba.improve.action")} color={colors.white} bg={isImproved ? '#4caf50' : '#f44336'}><ImprovementIcon /></ActionButton>
+                          {(userRole === 'admin' || userRole === 'ehs') && (
+                            <ActionButton onClick={() => handleDelete(e.id)} title={t("gemba.delete.action")} color="#d32f2f" bg="transparent">x</ActionButton>
+                          )}
                         </div>
                       </div>
                     );
@@ -923,25 +982,25 @@ function TuGemba({ user, isMobile, newLogCounts, setTuGembaNotifCounts }) {
                     <tr style={{ background: colors.primaryLight }}>
                         <th style={{ padding: "10px 14px", color: colors.textPrimary }}>{t("gemba.table.time")}</th>
                         <th style={{ padding: "10px 14px", color: colors.textPrimary }}>{t("gemba.table.group")}</th>
-                        <th style={{ padding: "10px 14px", color: colors.textPrimary, width: "45%" }}>{t("gemba.table.desc")}</th>
+                        <th style={{ padding: "10px 14px", color: colors.textPrimary, width: "50%" }}>{t("gemba.table.desc")}</th>
                         <th style={{ padding: "10px 8px", color: colors.textPrimary }}>{t("gemba.table.photo")}</th>
                         <th style={{ padding: "10px 8px", color: colors.textPrimary }}>{t("gemba.table.note")}</th>
-                        <th style={{ padding: "10px 8px", color: colors.textPrimary, minWidth: 100 }}>{t("gemba.table.action")}</th>
+                        <th style={{ padding: "10px 8px", color: colors.textPrimary, minWidth: 120 }}>{t("gemba.table.action")}</th>
                     </tr>
                   </thead>
                   <tbody key={dep.name}>
-                  {logs.length > 0 ? logs.map((log) => {
-                     const isImproved = log.completionDate && log.improvementImageUrl;
-                     const images = log.imageUrls || (log.imageUrl ? [log.imageUrl] : []);
+                  {scoreList.length > 0 ? scoreList.map((e) => {
+                     const isImproved = e.completionDate && e.improvementImageUrl;
+                     const images = e.imageUrls || (e.imageUrl ? [e.imageUrl] : []);
                      return (
-                      <tr key={log.id}>
-                      <td style={{ fontSize: 12, padding: "10px 14px" }}>{safeTsToDate(log.timestamp)?.toLocaleString("vi-VN")}</td>
-                      <td style={{ padding: "10px 14px" }}>{log.group}</td>
-                      <td style={{ padding: "10px 14px" }}>{log.description} {log.addedBy && <div style={{fontSize: '11px', color: colors.textSecondary, fontStyle: 'italic'}}>{t("gemba.by")} {log.addedBy}</div>}</td>
-                      <td style={{ textAlign: "center", padding: "10px 8px" }}>
+                      <tr key={e.id}>
+                      <td style={{ padding: "10px 14px", fontSize: 12 }}>{safeTsToDate(e.timestamp)?.toLocaleString("vi-VN")}</td>
+                      <td style={{ padding: "10px 14px" }}>{e.group}</td>
+                      <td style={{ padding: "10px 14px" }}>{e.group === 'Lỗi Khác' ? 'Lỗi khác' : e.desc} {e.addedBy && <div style={{fontSize: '11px', color: colors.textSecondary, fontStyle: 'italic'}}>{t("gemba.by")} {e.addedBy}</div>}</td>
+                      <td style={{ padding: "10px 8px", textAlign: "center" }}>
                         {images.length > 0 && (
                           <div style={{ position: 'relative', display: 'inline-block', cursor: 'pointer' }} onClick={() => openViewer(images, 0)}>
-                            <img src={thumbMap[images[0]] || images[0]} alt="ảnh lỗi" style={{ width: 40, height: 40, cursor: "pointer", borderRadius: 4, objectFit: 'cover' }}/>
+                            <img src={thumbMap[images[0]] || images[0]} alt="ảnh lỗi" style={{ width: 40, height: 40, borderRadius: 4, objectFit: "cover" }}/>
                             {images.length > 1 && (
                               <span style={{ position: 'absolute', top: -5, right: -5, background: 'rgba(0,0,0,0.7)', color: 'white', borderRadius: '50%', width: 18, height: 18, fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                 +{images.length - 1}
@@ -950,12 +1009,12 @@ function TuGemba({ user, isMobile, newLogCounts, setTuGembaNotifCounts }) {
                           </div>
                         )}
                       </td>
-                      <td style={{ textAlign: "center", padding: "10px 8px" }}>{log.note && <button onClick={() => alert(`Ghi chú:\n\n${log.note}`)} style={{ border: "none", background: "transparent", fontSize: 24, cursor: "pointer" }} title="Xem ghi chú">🗒️</button>}</td>
-                      <td style={{ textAlign: "center", padding: "10px 8px" }}>
-                        <div style={{display: 'flex', justifyContent: 'center', alignItems: 'center'}}>
-                          <ActionButton onClick={() => setImprovementModal({ isOpen: true, log: log })} title={t("gemba.improve.action")} color={colors.white} bg={isImproved ? "#4caf50" : "#f44336"}> <ImprovementIcon /> </ActionButton>
-                          {(userRole === "admin" || userRole === "ehs") && ( <ActionButton onClick={() => handleDelete(log.id)} title={t("gemba.delete.action")} color="#d32f2f" bg="transparent">x</ActionButton> )}
-                        </div>
+                      <td style={{ padding: "10px 8px", textAlign: "center" }}>{(e.note || (e.group === 'Lỗi Khác' && e.desc !== 'Lỗi khác' ? e.desc : null)) && <button onClick={() => alert(`Ghi chú:\n\n${e.note || e.desc}`)} style={{ border: "none", background: "transparent", fontSize: 24, cursor: "pointer" }} title="Xem ghi chú">🗒️</button>}</td>
+                      <td style={{ textAlign: "center" }}>
+                          <div style={{display: 'flex', justifyContent: 'center', alignItems: 'center'}}>
+                            <ActionButton onClick={() => setImprovementModal({ isOpen: true, error: e, logId: e.id })} title="Cải thiện/Khắc phục" color={colors.white} bg={isImproved ? "#4caf50" : "#f44336"}> <ImprovementIcon /> </ActionButton>
+                            {(userRole === "admin" || userRole === "ehs") && ( <ActionButton onClick={() => handleDelete(e.id)} title="Xóa lỗi" color="#d32f2f" bg="transparent">x</ActionButton> )}
+                          </div>
                       </td>
                       </tr>
                   )}) : ( <tr><td colSpan="6" style={{textAlign: 'center', padding: '20px'}}>{t("gemba.empty")}</td></tr> )}
@@ -966,8 +1025,8 @@ function TuGemba({ user, isMobile, newLogCounts, setTuGembaNotifCounts }) {
           <div style={{ width: '100%', order: isMobile ? 1 : 2, flexShrink: 0, [isMobile ? 'width' : 'maxWidth']: isMobile ? '100%' : 220 }}>
               {isMobile ? (
               <div style={{ marginBottom: 20 }}>
-                  <label htmlFor="dept-select-tu-gemba" style={{ fontWeight: 700, color: colors.primary, display: 'block', marginBottom: 8 }}>Chọn bộ phận:</label>
-                  <select id="dept-select-tu-gemba" value={depIndex} onChange={(e) => handleSelectDepartment(parseInt(e.target.value, 10))} style={{ width: "100%", padding: "12px 15px", borderRadius: 8, border: `1.5px solid ${colors.primaryLight}`, fontSize: 16, background: colors.surface, fontWeight: 'bold', color: colors.textPrimary }}>
+                  <label htmlFor="dept-select" style={{ fontWeight: 700, color: colors.primary, display: 'block', marginBottom: 8 }}>Chọn bộ phận:</label>
+                  <select id="dept-select" value={depIndex} onChange={(e) => handleSelectDepartment(parseInt(e.target.value, 10))} style={{ width: "100%", padding: "12px 15px", borderRadius: 8, border: `1.5px solid ${colors.primaryLight}`, fontSize: 16, background: colors.surface, fontWeight: 'bold', color: colors.textPrimary }}>
                   {departments.map((d, i) => (<option key={d.name} value={i}>{d.name}</option>))}
                   </select>
               </div>
@@ -977,12 +1036,12 @@ function TuGemba({ user, isMobile, newLogCounts, setTuGembaNotifCounts }) {
                   <div>
                   {departments.map((d, i) => (
                       <button key={d.name} style={{ display: "block", width: "100%", marginBottom: 10, padding: "10px 15px", borderRadius: 8, border: "none", fontWeight: 600, fontSize: 15, background: depIndex === i ? colors.primary : colors.backgroundLight, color: depIndex === i ? colors.white : colors.primary, boxShadow: depIndex === i ? `0 1.5px 7px ${colors.primary}33` : "none", cursor: "pointer", transition: "all .13s", position: 'relative' }} onClick={() => handleSelectDepartment(i)}>
-                        {d.name}
-                        {newLogCounts && newLogCounts[d.name] > 0 && (
-                          <span style={{ position: 'absolute', top: 5, right: 8, background: 'red', color: 'white', borderRadius: '50%', width: 20, height: 20, fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
-                            {newLogCounts[d.name]}
-                          </span>
-                        )}
+                      {d.name}
+                      {newLogCounts && newLogCounts[d.name] > 0 && (
+                        <span style={{ position: 'absolute', top: 5, right: 8, background: 'red', color: 'white', borderRadius: '50%', width: 20, height: 20, fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
+                          {newLogCounts[d.name]}
+                        </span>
+                      )}
                       </button>
                   ))}
                   </div>
@@ -997,22 +1056,24 @@ function TuGemba({ user, isMobile, newLogCounts, setTuGembaNotifCounts }) {
 
 // ====================== CLEANUP FUNCTION ======================
 async function runCleanup() {
-    const twoMonthsAgo = new Date();
-    twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
-    const twoMonthsAgoTimestamp = Timestamp.fromDate(twoMonthsAgo);
+    const sevenMonthsAgo = new Date();
+    sevenMonthsAgo.setMonth(sevenMonthsAgo.getMonth() - 7);
+    const sevenMonthsAgoTimestamp = Timestamp.fromDate(sevenMonthsAgo);
     try {
-        const oldLogsQuery = query(collection(db, "tu_gemba_logs"), where("timestamp", "<=", twoMonthsAgoTimestamp));
+        const oldLogsQuery = query(collection(db, "tu_gemba_logs"), where("timestamp", "<=", sevenMonthsAgoTimestamp));
         const oldLogsSnap = await getDocs(oldLogsQuery);
         if (oldLogsSnap.empty) return;
-        const batch = writeBatch(db);
+        let batch = writeBatch(db); let count = 0;
         const imagesToDelete = [];
-        oldLogsSnap.forEach(doc => {
-            const logData = doc.data();
+        for (const document of oldLogsSnap.docs) {
+            const logData = document.data();
             const allImages = [...(logData.imageUrls || []), ...(logData.imageUrl ? [logData.imageUrl] : []), ...(logData.improvementImageUrl ? [logData.improvementImageUrl] : [])];
             imagesToDelete.push(...allImages);
-            batch.delete(doc.ref);
-        });
-        await batch.commit();
+            batch.delete(document.ref);
+            count++;
+            if (count >= 400) { await batch.commit(); batch = writeBatch(db); count = 0; }
+        }
+        if (count > 0) await batch.commit();
         for (const url of imagesToDelete) {
             try {
                 const imageRef = ref(storage, url);

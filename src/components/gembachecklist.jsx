@@ -865,9 +865,6 @@ function GembaReportDashboard({ onClose, departments, allDeptScores, selectedMon
             <div style={{ fontWeight: 800, fontSize: isMobile ? 16 : 21, color: '#e8f0fe', letterSpacing: '-0.3px' }}>
               📊 Báo cáo Gemba — {monthLabel}
             </div>
-            <div style={{ fontSize: 12, color: '#7b8fba', marginTop: 3 }}>
-              Điểm còn lại · Sắp xếp cao → thấp · Hover cột để xem chi tiết
-            </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <input

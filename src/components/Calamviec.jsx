@@ -27,7 +27,11 @@ const statusRedText = "#721c24";
 const statusRedBorder = "#f5c6cb";
 
 /* ====== Domain constants ====== */
-const DYNAMIC_TASKS = ["Giám sát hút thuốc", "Gemba vòng ngoài", "Giám sát nhà rác"];
+const DEFAULT_TASKS = [
+  { id: "Giám sát hút thuốc", name: "Giám sát hút thuốc" },
+  { id: "Gemba vòng ngoài", name: "Gemba vòng ngoài" },
+  { id: "Giám sát nhà rác", name: "Giám sát nhà rác" }
+];
 const STATIC_TASK = "Gemba tại bộ phận";
 const SHIFTS = { S1: "Ca 1", S2: "Ca 2", S3: "Ca 3", HC: "Ca HC", S8: "Ca 8" };
 const SHIFT_KEYS = ["S1", "S2", "S3", "HC", "S8"];
@@ -78,28 +82,28 @@ const formatDateToId = (date) => {
 // =================================================================
 
 
-const createEmptyBoardForWeek = (weekDates) => {
+const createEmptyBoardForWeek = (weekDates, tasksList) => {
   const board = {};
   weekDates.forEach((day) => {
     const dayId = formatDateToId(day);
     board[dayId] = {};
     SHIFT_KEYS.forEach((shiftKey) => {
       board[dayId][shiftKey] = {};
-      DYNAMIC_TASKS.forEach((task) => {
-        board[dayId][shiftKey][task] = [];
+      tasksList.forEach((task) => {
+        board[dayId][shiftKey][task.id] = [];
       });
     });
   });
   return board;
 };
 
-const ensureDayInBoard = (boardObj, dayId) => {
+const ensureDayInBoard = (boardObj, dayId, tasksList) => {
   if (!boardObj[dayId]) boardObj[dayId] = {};
   SHIFT_KEYS.forEach((shiftKey) => {
     if (!boardObj[dayId][shiftKey]) boardObj[dayId][shiftKey] = {};
-    DYNAMIC_TASKS.forEach((task) => {
-      if (!Array.isArray(boardObj[dayId][shiftKey][task])) {
-        boardObj[dayId][shiftKey][task] = [];
+    tasksList.forEach((task) => {
+      if (!Array.isArray(boardObj[dayId][shiftKey][task.id])) {
+        boardObj[dayId][shiftKey][task.id] = [];
       }
     });
   });
@@ -130,6 +134,15 @@ function CaLamViec({ user, isMobile }) {
   const [allUsers, setAllUsers] = useState([]);
   const [draggingItemId, setDraggingItemId] = useState(null);
 
+  // Dynamic tasks state
+  const [tasks, setTasks] = useState([]);
+  const [newTaskName, setNewTaskName] = useState("");
+  const [editingTaskId, setEditingTaskId] = useState(null);
+  const [editingTaskName, setEditingTaskName] = useState("");
+
+  // Notes modal state
+  const [noteModal, setNoteModal] = useState(null); // { item, shiftKey, task, noteText }
+
   const weekDates = useMemo(() => getWeekDates(selectedDate), [selectedDate]);
   const weekId = useMemo(
     () => `${weekDates[0].getFullYear()}-${getWeekNumber(weekDates[0])}`,
@@ -142,6 +155,9 @@ function CaLamViec({ user, isMobile }) {
 
   const canUpdateShift = ["admin", "ehs", "ehs committee"].includes(userRole);
   const canPlanBoard = ["admin", "ehs"].includes(userRole);
+  const isEhsCommittee = userRole === "ehs committee";
+  const today = new Date();
+  const isSundayMorning = today.getDay() === 0 && today.getHours() < 12;
 
   const ehsCommitteeMembers = useMemo(
     () => allUsers
@@ -150,6 +166,28 @@ function CaLamViec({ user, isMobile }) {
     [allUsers]
   );
 
+  // 1. Fetch Dynamic Tasks
+  useEffect(() => {
+    const docRef = doc(db, "weekly_assignments_v6", "config_tasks");
+    const unsubTasks = onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (Array.isArray(data.tasks)) {
+          setTasks(data.tasks);
+        } else {
+          setTasks(DEFAULT_TASKS);
+        }
+      } else {
+        setTasks(DEFAULT_TASKS);
+        if (canPlanBoard) {
+          setDoc(docRef, { tasks: DEFAULT_TASKS }).catch(console.error);
+        }
+      }
+    });
+    return () => unsubTasks();
+  }, [canPlanBoard]);
+
+  // 2. Fetch Users list
   useEffect(() => {
     const fetchAllUsers = async () => {
       try {
@@ -161,13 +199,16 @@ function CaLamViec({ user, isMobile }) {
         setAllUsers(usersList);
       } catch (error) {
         console.error("Lỗi khi lấy danh sách người dùng:", error);
-        setAllUsers([]); // Không block loading guard dù bị deny
+        setAllUsers([]);
       }
     };
     fetchAllUsers();
   }, []);
 
+  // 3. Fetch Shifts & Assignments
   useEffect(() => {
+    if (tasks.length === 0) return; // Đợi tasks được load xong
+
     setLoading(true);
     
     const unsubShifts = onSnapshot(
@@ -200,7 +241,6 @@ function CaLamViec({ user, isMobile }) {
         }
       },
       (error) => {
-        // Lỗi permission hoặc network — vẫn phải để component render được
         console.error("Lỗi onSnapshot weekly_shifts:", error);
         setUserShifts({});
       }
@@ -210,7 +250,7 @@ function CaLamViec({ user, isMobile }) {
       doc(db, "weekly_assignments_v6", weekId),
       async (docSnap) => {
         if (!docSnap.exists()) {
-          const emptyBoard = createEmptyBoardForWeek(weekDates);
+          const emptyBoard = createEmptyBoardForWeek(weekDates, tasks);
           if (canPlanBoard) {
             try {
               await setDoc(
@@ -224,18 +264,17 @@ function CaLamViec({ user, isMobile }) {
           }
           setBoard(emptyBoard);
         } else {
-          const boardData = docSnap.data().board || createEmptyBoardForWeek(weekDates);
-          weekDates.forEach((d) => ensureDayInBoard(boardData, formatDateToId(d)));
+          const boardData = docSnap.data().board || createEmptyBoardForWeek(weekDates, tasks);
+          weekDates.forEach((d) => ensureDayInBoard(boardData, formatDateToId(d), tasks));
           setBoard(boardData);
         }
 
         setLoading(false);
       },
       (error) => {
-        // Lỗi permission hoặc network — tạo board rỗng để tránh React crash
         console.error("Lỗi onSnapshot weekly_assignments_v6:", error);
-        setBoard(createEmptyBoardForWeek(weekDates));
-        setLoading(false); // QUAN TRỌNG: phải gọi để thoát trạng thái loading
+        setBoard(createEmptyBoardForWeek(weekDates, tasks));
+        setLoading(false);
       }
     );
 
@@ -243,7 +282,111 @@ function CaLamViec({ user, isMobile }) {
       unsubShifts();
       unsubAssignments();
     };
-  }, [weekId, canPlanBoard]); // weekId đã encode đủ thông tin tuần, không cần JSON.stringify(weekDates) 
+  }, [weekId, canPlanBoard, tasks]); 
+
+  // Helpers for managing task columns (Admin/EHS)
+  const handleAddTask = async () => {
+    if (!newTaskName.trim()) return;
+    const duplicate = tasks.some(t => t.name.toLowerCase() === newTaskName.trim().toLowerCase());
+    if (duplicate) {
+      alert("Tên nhiệm vụ này đã tồn tại!");
+      return;
+    }
+    const newTaskId = `task_${Date.now()}`;
+    const updatedTasks = [...tasks, { id: newTaskId, name: newTaskName.trim() }];
+    try {
+      await setDoc(doc(db, "weekly_assignments_v6", "config_tasks"), { tasks: updatedTasks });
+      setNewTaskName("");
+    } catch (error) {
+      console.error("Lỗi khi thêm cột nhiệm vụ:", error);
+      alert("Không thể thêm nhiệm vụ. Kiểm tra cấu hình Security Rules.");
+    }
+  };
+
+  const handleSaveTaskName = async (taskId) => {
+    if (!editingTaskName.trim()) return;
+    const duplicate = tasks.some(t => t.id !== taskId && t.name.toLowerCase() === editingTaskName.trim().toLowerCase());
+    if (duplicate) {
+      alert("Tên nhiệm vụ này đã tồn tại!");
+      return;
+    }
+    const updatedTasks = tasks.map(t => t.id === taskId ? { ...t, name: editingTaskName.trim() } : t);
+    try {
+      await setDoc(doc(db, "weekly_assignments_v6", "config_tasks"), { tasks: updatedTasks });
+      setEditingTaskId(null);
+    } catch (error) {
+      console.error("Lỗi khi cập nhật tên nhiệm vụ:", error);
+      alert("Không thể cập nhật tên nhiệm vụ.");
+    }
+  };
+
+  const handleDeleteTask = async (taskId, taskName) => {
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa cột nhiệm vụ "${taskName}"? Các dữ liệu đã phân công trong cột này sẽ bị ẩn.`)) return;
+    const updatedTasks = tasks.filter(t => t.id !== taskId);
+    try {
+      await setDoc(doc(db, "weekly_assignments_v6", "config_tasks"), { tasks: updatedTasks });
+    } catch (error) {
+      console.error("Lỗi khi xóa nhiệm vụ:", error);
+      alert("Không thể xóa nhiệm vụ.");
+    }
+  };
+
+  // Open note popup
+  const handleNameTagClick = (item, shiftKey, task) => {
+    if (!canPlanBoard) return;
+    setNoteModal({
+      item,
+      shiftKey,
+      task,
+      noteText: item.note || ""
+    });
+  };
+
+  // Save note to Firestore
+  const handleSaveNote = async () => {
+    if (!noteModal) return;
+    const { item, shiftKey, task, noteText } = noteModal;
+    
+    const newBoard = JSON.parse(JSON.stringify(board));
+    const list = newBoard[selectedDateId]?.[shiftKey]?.[task.id] || [];
+    const idx = list.findIndex((it) => it.id === item.id);
+    if (idx > -1) {
+      list[idx].note = noteText.trim();
+    } else {
+      return;
+    }
+    
+    setBoard(newBoard);
+    setNoteModal(null);
+    
+    try {
+      await setDoc(
+        doc(db, "weekly_assignments_v6", weekId),
+        { board: newBoard },
+        { merge: true }
+      );
+      
+      // Gửi thông báo đến người được note
+      const targetUserObj = allUsers.find((u) => u.name === item.name);
+      if (targetUserObj && targetUserObj.id) {
+        const formattedDate = selectedDate.toLocaleDateString("vi-VN");
+        const msg = noteText.trim()
+          ? `Bạn có ghi chú mới cho nhiệm vụ "${task.name}" ca ${SHIFTS[shiftKey] || shiftKey} ngày ${formattedDate}: "${noteText.trim()}"`
+          : `Ghi chú cho nhiệm vụ "${task.name}" ca ${SHIFTS[shiftKey] || shiftKey} ngày ${formattedDate} đã được xóa.`;
+        
+        await addDoc(collection(db, "notifications"), {
+          type: "shift_note",
+          message: msg,
+          targetUserId: targetUserObj.id,
+          readBy: [],
+          timestamp: serverTimestamp()
+        });
+      }
+    } catch (e) {
+      console.error("Lỗi khi lưu ghi chú:", e);
+      alert("Lỗi khi lưu ghi chú!");
+    }
+  };
 
   const handleShiftChange = async (dayId, newShift) => {
     if (!currentUserName || !canUpdateShift) return;
@@ -262,17 +405,46 @@ function CaLamViec({ user, isMobile }) {
 
   const assignmentCountToday = useMemo(() => {
     const map = {};
-    if (!board) return map;
+    if (!board || tasks.length === 0) return map;
     const dayData = board[selectedDateId] || {};
     SHIFT_KEYS.forEach((sk) => {
-      DYNAMIC_TASKS.forEach((task) => {
-        (dayData[sk]?.[task] || []).forEach((p) => {
+      tasks.forEach((task) => {
+        (dayData[sk]?.[task.id] || []).forEach((p) => {
           if (p?.name) map[p.name] = (map[p.name] || 0) + 1;
         });
       });
     });
     return map;
-  }, [board, selectedDateId]);
+  }, [board, selectedDateId, tasks]);
+
+  // Gather tasks for the logged in user this week
+  const myWeekAssignments = useMemo(() => {
+    const list = [];
+    if (!board || !currentUserName || tasks.length === 0) return list;
+    
+    weekDates.forEach((day) => {
+      const dayId = formatDateToId(day);
+      const dayData = board[dayId] || {};
+      SHIFT_KEYS.forEach((sk) => {
+        tasks.forEach((t) => {
+          const assignedList = dayData[sk]?.[t.id] || [];
+          assignedList.forEach((item) => {
+            if (item?.name === currentUserName) {
+              list.push({
+                date: day,
+                dateId: dayId,
+                shiftKey: sk,
+                taskId: t.id,
+                taskName: t.name,
+                note: item.note || ""
+              });
+            }
+          });
+        });
+      });
+    });
+    return list;
+  }, [board, weekDates, tasks, currentUserName]);
 
   const onDragStart = (start) => {
     if (!canPlanBoard) return;
@@ -294,7 +466,7 @@ function CaLamViec({ user, isMobile }) {
       (board[selectedDateId]
         ? Object.values(board[selectedDateId])
             .flatMap((shift) => Object.values(shift))
-            .flatMap((task) => task)
+            .flatMap((taskList) => taskList)
             .find((item) => item.id === draggableId)?.name
         : null);
 
@@ -356,10 +528,14 @@ function CaLamViec({ user, isMobile }) {
         const { shift: dShift, task: dTask } = parseBoardDroppableId(destination.droppableId);
         try {
           const targetUserObj = allUsers.find((u) => u.name === draggedItem.name);
-          if (targetUserObj && targetUserObj.id) { // In allUsers, id is the document ID (uid)
+          if (targetUserObj && targetUserObj.id) {
+            // Lấy tên nhiệm vụ hiển thị trên UI từ tasks list
+            const foundTask = tasks.find(t => t.id === dTask);
+            const displayTaskName = foundTask ? foundTask.name : dTask;
+            
             await addDoc(collection(db, "notifications"), {
               type: "shift_assign",
-              message: `Bạn được phân công nhiệm vụ "${dTask}" ca ${SHIFTS[dShift] || dShift} ngày ${selectedDate.toLocaleDateString("vi-VN")}.`,
+              message: `Bạn được phân công nhiệm vụ "${displayTaskName}" ca ${SHIFTS[dShift] || dShift} ngày ${selectedDate.toLocaleDateString("vi-VN")}.`,
               targetUserId: targetUserObj.id,
               readBy: [],
               timestamp: serverTimestamp()
@@ -392,7 +568,7 @@ function CaLamViec({ user, isMobile }) {
     setSelectedDate(new Date());
   };
 
-  if (loading || !board) {
+  if (loading || !board || tasks.length === 0) {
     return (
       <div style={{ textAlign: "center", fontWeight: "bold" }}>
         {t("loading.shifts")}
@@ -410,10 +586,10 @@ function CaLamViec({ user, isMobile }) {
                 {SHIFTS[shiftKey]}
               </h4>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {DYNAMIC_TASKS.map((task) => (
-                  <div key={`${shiftKey}-${task}`} style={{ display: 'flex', alignItems: 'flex-start' }}>
-                    <div style={{ width: '120px', flexShrink: 0, fontSize: 13, paddingTop: '8px' }}>{task}</div>
-                    <Droppable droppableId={`board-${shiftKey}-${task}`} isDropDisabled={!canPlanBoard}>
+                {tasks.map((task) => (
+                  <div key={`${shiftKey}-${task.id}`} style={{ display: 'flex', alignItems: 'flex-start' }}>
+                    <div style={{ width: '120px', flexShrink: 0, fontSize: 13, paddingTop: '8px' }}>{task.name}</div>
+                    <Droppable droppableId={`board-${shiftKey}-${task.id}`} isDropDisabled={!canPlanBoard}>
                       {(provided, snapshot) => {
                         const draggingUser = allUsers.find((u) => u.name === draggingItemId);
                         const draggingUserShift = userShifts[draggingUser?.name]?.[selectedDateId];
@@ -428,7 +604,7 @@ function CaLamViec({ user, isMobile }) {
                               borderRadius: 6, minHeight: 40, padding: 4, flexGrow: 1, display: 'flex', flexWrap: 'wrap', gap: 4,
                             }}
                           >
-                            {(board[selectedDateId]?.[shiftKey]?.[task] || []).map((item, index) => (
+                            {(board[selectedDateId]?.[shiftKey]?.[task.id] || []).map((item, index) => (
                               item && item.name ? (
                                 <Draggable key={item.id} draggableId={item.id} index={index} isDragDisabled={!canPlanBoard}>
                                   {(provided2) => (
@@ -436,12 +612,16 @@ function CaLamViec({ user, isMobile }) {
                                       ref={provided2.innerRef}
                                       {...provided2.draggableProps}
                                       {...provided2.dragHandleProps}
+                                      onClick={() => handleNameTagClick(item, shiftKey, task)}
+                                      className="name-tag-container"
                                       style={{
-                                        padding: "6px 8px", borderRadius: 4, cursor: "grab", fontSize: 12, fontWeight: 500,
+                                        padding: "6px 8px", borderRadius: 4, cursor: canPlanBoard ? "pointer" : "default", fontSize: 12, fontWeight: 500,
                                         background: "#EBF5F4", ...provided2.draggableProps.style,
                                       }}
                                     >
                                       {item.name}
+                                      {item.note && <span style={{ marginLeft: 4, color: orange }} title={item.note}>📝</span>}
+                                      {item.note && <div className="note-tooltip"><b>Ghi chú:</b> {item.note}</div>}
                                     </div>
                                   )}
                                 </Draggable>
@@ -471,23 +651,26 @@ function CaLamViec({ user, isMobile }) {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "100px repeat(4, 1fr)",
+          gridTemplateColumns: `100px repeat(${tasks.length + 1}, 1fr)`,
           gap: "10px",
         }}
       >
         <div />
-        {[...DYNAMIC_TASKS, STATIC_TASK].map((task) => (
-          <div key={task} style={{ textAlign: "center", fontWeight: "bold", fontSize: 14, wordBreak: "break-word" }}>
-            {task}
+        {tasks.map((task) => (
+          <div key={task.id} style={{ textAlign: "center", fontWeight: "bold", fontSize: 14, wordBreak: "break-word" }}>
+            {task.name}
           </div>
         ))}
+        <div style={{ textAlign: "center", fontWeight: "bold", fontSize: 14, wordBreak: "break-word" }}>
+          {STATIC_TASK}
+        </div>
         {SHIFT_KEYS.map((shiftKey) => (
           <React.Fragment key={shiftKey}>
             <div style={{ fontWeight: "bold", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>
               {SHIFTS[shiftKey]}
             </div>
-            {DYNAMIC_TASKS.map((task) => (
-              <Droppable key={`${shiftKey}-${task}`} droppableId={`board-${shiftKey}-${task}`} isDropDisabled={!canPlanBoard}>
+            {tasks.map((task) => (
+              <Droppable key={`${shiftKey}-${task.id}`} droppableId={`board-${shiftKey}-${task.id}`} isDropDisabled={!canPlanBoard}>
                 {(provided, snapshot) => {
                   const draggingUser = allUsers.find((u) => u.name === draggingItemId);
                   const draggingUserShift = userShifts[draggingUser?.name]?.[selectedDateId];
@@ -502,7 +685,7 @@ function CaLamViec({ user, isMobile }) {
                         borderRadius: 6, minHeight: 60, padding: 2,
                       }}
                     >
-                      {(board[selectedDateId]?.[shiftKey]?.[task] || []).map((item, index) => (
+                      {(board[selectedDateId]?.[shiftKey]?.[task.id] || []).map((item, index) => (
                         item && item.name ? (
                           <Draggable key={item.id} draggableId={item.id} index={index} isDragDisabled={!canPlanBoard}>
                             {(provided2, snapshot2) => (
@@ -510,8 +693,10 @@ function CaLamViec({ user, isMobile }) {
                                 ref={provided2.innerRef}
                                 {...provided2.draggableProps}
                                 {...provided2.dragHandleProps}
+                                onClick={() => handleNameTagClick(item, shiftKey, task)}
+                                className="name-tag-container"
                                 style={{
-                                  padding: "8px 10px", margin: "2px", borderRadius: 4, cursor: "grab", textAlign: "center",
+                                  padding: "8px 10px", margin: "2px", borderRadius: 4, cursor: canPlanBoard ? "pointer" : "default", textAlign: "center",
                                   fontSize: 13, fontWeight: 500, background: "#EBF5F4",
                                   ...provided2.draggableProps.style,
                                   transform: snapshot2.isDragging ? `${provided2.draggableProps.style.transform} scale(1.05)` : provided2.draggableProps.style.transform,
@@ -519,6 +704,8 @@ function CaLamViec({ user, isMobile }) {
                                 }}
                               >
                                 {item.name}
+                                {item.note && <span style={{ marginLeft: 4, color: orange }} title={item.note}>📝</span>}
+                                {item.note && <div className="note-tooltip"><b>Ghi chú:</b> {item.note}</div>}
                               </div>
                             )}
                           </Draggable>
@@ -541,14 +728,119 @@ function CaLamViec({ user, isMobile }) {
 
   return (
     <div>
+      {/* Dynamic hover styles for notes tooltip */}
+      <style>{`
+        .name-tag-container {
+          position: relative;
+        }
+        .note-tooltip {
+          visibility: hidden;
+          position: absolute;
+          bottom: 115%;
+          left: 50%;
+          transform: translateX(-50%);
+          background-color: #2c3e50;
+          color: #fff;
+          padding: 8px 12px;
+          border-radius: 8px;
+          z-index: 9999;
+          width: 180px;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+          font-size: 12px;
+          line-height: 1.4;
+          opacity: 0;
+          transition: opacity 0.2s;
+          pointer-events: none;
+          font-weight: normal;
+          text-align: left;
+          white-space: normal;
+        }
+        .note-tooltip::after {
+          content: "";
+          position: absolute;
+          top: 100%;
+          left: 50%;
+          margin-left: -5px;
+          border-width: 5px;
+          border-style: solid;
+          border-color: #2c3e50 transparent transparent transparent;
+        }
+        .name-tag-container:hover .note-tooltip {
+          visibility: visible;
+          opacity: 1;
+        }
+      `}</style>
+
       <h2 style={{ fontWeight: 700, color: orange }}>
         {t("page.shifts.title")}
       </h2>
+
+      {/* Sleek dashboard for user's assigned tasks and notes */}
+      {isEhsCommittee && (
+        <div style={{
+          background: "#eef7f6", borderRadius: 8, padding: isMobile ? 12 : 18,
+          marginBottom: 20, borderLeft: `5px solid ${orange}`
+        }}>
+          <h3 style={{ marginTop: 0, fontSize: isMobile ? 16 : 20, color: orange, display: "flex", alignItems: "center", gap: 8 }}>
+            📋 Nhiệm vụ & Ghi chú của tôi tuần này
+          </h3>
+          {myWeekAssignments.length > 0 ? (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
+              {myWeekAssignments.map((assign, idx) => (
+                <div key={idx} style={{
+                  background: "white", padding: 12, borderRadius: 8,
+                  boxShadow: "0 2px 5px rgba(0,0,0,0.05)", border: "1px solid #d1e7e4"
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                    <span style={{ fontWeight: "bold", fontSize: 13, color: "#555" }}>
+                      📅 {assign.date.toLocaleDateString("vi-VN", { weekday: "short", day: "2-digit", month: "2-digit" })}
+                    </span>
+                    <span style={{
+                      background: orangeLight, color: orange, padding: "2px 8px",
+                      borderRadius: 12, fontSize: 11, fontWeight: "bold"
+                    }}>
+                      {SHIFTS[assign.shiftKey] || assign.shiftKey}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 15, fontWeight: "bold", color: "#2c3e50", marginBottom: 6 }}>
+                    Nhiệm vụ: {assign.taskName}
+                  </div>
+                  {assign.note ? (
+                    <div style={{
+                      background: "#fdf8e2", borderLeft: "3px solid #f39c12",
+                      padding: "8px 10px", borderRadius: 4, fontSize: 12, color: "#7f8c8d"
+                    }}>
+                      <b>Ghi chú:</b> {assign.note}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 12, color: "#95a5a6", fontStyle: "italic" }}>
+                      Không có ghi chú nào.
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ color: "#666", fontSize: 14, fontStyle: "italic" }}>
+              Bạn không có nhiệm vụ phân công đặc biệt nào trong tuần này.
+            </div>
+          )}
+        </div>
+      )}
 
       <div style={{ background: "#f5f5f5", borderRadius: 8, padding: isMobile ? 10 : 15, marginBottom: 20 }}>
         <h3 style={{ marginTop: 0, fontSize: isMobile ? 16 : 20 }}>
           {t("shifts.myWeek").replace("{week}", getWeekNumber(weekDates[0]))}
         </h3>
+        {isEhsCommittee && isSundayMorning && (
+          <div style={{
+            background: "#fff3cd", color: "#856404", border: "1px solid #ffeeba",
+            padding: "12px 16px", borderRadius: 8, marginBottom: 15, fontWeight: "bold",
+            display: "flex", alignItems: "center", gap: 8, fontSize: 13
+          }}>
+            ⚠️ Đang là sáng Chủ Nhật! Vui lòng hoàn tất báo ca đầy đủ cho tuần mới.
+          </div>
+        )}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "10px" }}>
           {weekDates.map((day) => {
             const dayId = formatDateToId(day);
@@ -670,6 +962,82 @@ function CaLamViec({ user, isMobile }) {
           </div>
         </div>
 
+        {/* Cấu hình/Quản lý danh sách nhiệm vụ của Admin & EHS */}
+        {canPlanBoard && (
+          <div style={{
+            background: "white", padding: 15, borderRadius: 8, marginBottom: 20,
+            boxShadow: "0 2px 8px rgba(0,0,0,0.05)", border: `1px solid ${orangeLight}`
+          }}>
+            <h4 style={{ margin: "0 0 10px 0", color: orange, display: "flex", alignItems: "center", gap: 6, fontSize: 15 }}>
+              🛠️ Quản lý danh sách cột nhiệm vụ (Chỉ Admin / EHS)
+            </h4>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+              {tasks.map((task) => (
+                <div key={task.id} style={{
+                  display: "flex", alignItems: "center", gap: 6, background: "#f1f3f5",
+                  padding: "6px 12px", borderRadius: 20, fontSize: 13, border: "1px solid #dee2e6"
+                }}>
+                  {editingTaskId === task.id ? (
+                    <input
+                      type="text"
+                      value={editingTaskName}
+                      onChange={(e) => setEditingTaskName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleSaveTaskName(task.id);
+                        if (e.key === 'Escape') setEditingTaskId(null);
+                      }}
+                      autoFocus
+                      style={{
+                        padding: "2px 6px", fontSize: 13, border: `1px solid ${orange}`,
+                        borderRadius: 4, width: 120
+                      }}
+                    />
+                  ) : (
+                    <span>{task.name}</span>
+                  )}
+                  
+                  {editingTaskId === task.id ? (
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <button onClick={() => handleSaveTaskName(task.id)} style={{ border: "none", background: "none", cursor: "pointer", fontSize: 12 }} title="Lưu">✔️</button>
+                      <button onClick={() => setEditingTaskId(null)} style={{ border: "none", background: "none", cursor: "pointer", fontSize: 12 }} title="Hủy">❌</button>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", gap: 4, marginLeft: 4 }}>
+                      <button onClick={() => {
+                        setEditingTaskId(task.id);
+                        setEditingTaskName(task.name);
+                      }} style={{ border: "none", background: "none", cursor: "pointer", fontSize: 12, opacity: 0.6 }} title="Sửa tên">✏️</button>
+                      <button onClick={() => handleDeleteTask(task.id, task.name)} style={{ border: "none", background: "none", cursor: "pointer", fontSize: 12, opacity: 0.6 }} title="Xóa cột">🗑️</button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input
+                type="text"
+                placeholder="Nhập tên cột nhiệm vụ mới..."
+                value={newTaskName}
+                onChange={(e) => setNewTaskName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleAddTask();
+                }}
+                style={{
+                  padding: "8px 12px", border: "1px solid #ced4da", borderRadius: 6,
+                  fontSize: 13, flexGrow: 1, maxWidth: 300
+                }}
+              />
+              <button onClick={handleAddTask} style={{
+                background: orange, color: "white", border: "none", padding: "8px 16px",
+                borderRadius: 6, fontSize: 13, fontWeight: "bold", cursor: "pointer"
+              }}>
+                ➕ Thêm cột
+              </button>
+            </div>
+          </div>
+        )}
+
         <div style={{ background: "#f5f5f5", borderRadius: 8, padding: isMobile ? 10 : 15, flexGrow: 1 }}>
           <h3 style={{ textAlign: "center", color: dark, marginTop: 0, fontSize: isMobile ? 16 : 20 }}>
             {t("board.titleForDay").replace("{date}", selectedDate.toLocaleDateString("vi-VN"))}
@@ -677,6 +1045,60 @@ function CaLamViec({ user, isMobile }) {
           {renderAssignmentBoard()}
         </div>
       </DragDropContext>
+
+      {/* Note Edit Modal Overlay */}
+      {noteModal && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: "rgba(0,0,0,0.5)", display: "flex", justifyContent: "center",
+          alignItems: "center", zIndex: 10000, padding: 15
+        }}>
+          <div style={{
+            backgroundColor: "white", padding: 20, borderRadius: 12, width: "100%",
+            maxWidth: 450, boxShadow: "0 10px 25px rgba(0,0,0,0.2)", position: "relative"
+          }}>
+            <h3 style={{ marginTop: 0, color: orange, marginBottom: 4 }}>
+              📝 Ghi chú cho {noteModal.item.name}
+            </h3>
+            <p style={{ margin: "0 0 15px 0", fontSize: 13, color: "#666" }}>
+              Nhiệm vụ: <b>{noteModal.task.name}</b> | Ca: <b>{SHIFTS[noteModal.shiftKey] || noteModal.shiftKey}</b>
+            </p>
+            
+            <textarea
+              value={noteModal.noteText}
+              onChange={(e) => setNoteModal({ ...noteModal, noteText: e.target.value })}
+              placeholder="Nhập nội dung ghi chú (ví dụ: vị trí Gemba, lưu ý đặc biệt...)"
+              rows={4}
+              style={{
+                width: "100%", padding: "10px", borderRadius: 8, border: "1px solid #ccc",
+                fontSize: 14, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 15
+              }}
+              autoFocus
+            />
+            
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <button
+                onClick={() => setNoteModal(null)}
+                style={{
+                  padding: "8px 16px", border: "1px solid #ccc", background: "none",
+                  borderRadius: 6, cursor: "pointer", fontSize: 13
+                }}
+              >
+                Hủy
+              </button>
+              <button
+                onClick={handleSaveNote}
+                style={{
+                  padding: "8px 16px", border: "none", background: orange, color: "white",
+                  borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: "bold"
+                }}
+              >
+                Lưu ghi chú
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

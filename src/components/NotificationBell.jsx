@@ -34,9 +34,11 @@ const getNotificationIcon = (type) => {
     case "new_error": return "🚨"; // fallback
     case "bodam_assign": return "📻";
     case "shift_assign": return "🗓️";
+    case "shift_note": return "📝";
     case "shift_reminder": return "⏳";
     case "role_request": return "👤";
     case "role_response": return "🔑";
+    case "meal_registration": return "🍽️";
     default: return "🔔";
   }
 };
@@ -48,9 +50,11 @@ const getTabForNotification = (type) => {
     case "new_error":          return 0; // fallback cũ → Gemba
     case "bodam_assign":       return 2; // Tab Bộ đàm
     case "shift_assign":       return 3; // Tab Ca làm việc
+    case "shift_note":         return 3; // Tab Ca làm việc
     case "shift_reminder":     return 3; // Tab Ca làm việc
     case "role_request":       return 8; // Tab Quản lý người dùng
     case "role_response":      return 0;
+    case "meal_registration":  return 7; // Tab Báo Cơm
     default: return null;
   }
 };

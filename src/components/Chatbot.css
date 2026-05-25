@@ -19,20 +19,22 @@
 
 #chat-icon-button {
   position: fixed;
-  bottom: 30px;
-  right: 30px;
-  width: 60px;
-  height: 60px;
+  bottom: 25px;
+  right: 25px;
+  width: 80px;
+  height: 80px;
   border-radius: 50%;
-  background-color: #466E73; /* Màu chính của bạn */
+  background-color: transparent;
   border: none;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  box-shadow: none;
   z-index: 999;
   display: flex;
   justify-content: center;
   align-items: center;
   transition: transform 0.2s ease-in-out;
+  padding: 0;
+  outline: none;
 }
 
 #chat-icon-button:hover {
@@ -40,8 +42,9 @@
 }
 
 #chat-icon-button img {
-  width: 36px;
-  height: 36px;
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
 }
 
 /* Style cho cửa sổ chat để nó không bị che mất icon */

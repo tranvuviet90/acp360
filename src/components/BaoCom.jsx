@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { db } from '../firebase';
 import {
   doc, onSnapshot, setDoc, updateDoc, getDoc,
-  serverTimestamp, arrayUnion, writeBatch
+  serverTimestamp, arrayUnion, writeBatch,
+  collection, addDoc
 } from 'firebase/firestore';
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
@@ -332,6 +333,14 @@ function DepartmentView({ user, reportData, selectedDateKey }) {
       try {
         await setDoc(docRef, payload, { merge: true });
         pushToast(`Đã gửi YÊU CẦU cập nhật TC cho ${SHIFT_NAMES[shift]} đến Admin.`, 'info');
+        await addDoc(collection(db, "notifications"), {
+          type: "meal_registration",
+          message: `${user.name} đã gửi YÊU CẦU cập nhật Tăng Ca cho ${SHIFT_NAMES[shift]} (bộ phận ${userRole}).`,
+          targetRoles: ["admin", "ehs"],
+          readBy: [],
+          createdBy: user.uid || "",
+          timestamp: serverTimestamp()
+        });
       } catch (e) {
         console.error(e);
         pushToast('Gửi yêu cầu thất bại.', 'error');
@@ -358,6 +367,14 @@ function DepartmentView({ user, reportData, selectedDateKey }) {
       try {
         await setDoc(docRef, payload, { merge: true });
         pushToast(`Đã lưu báo cơm cho ${SHIFT_NAMES[shift]}.`, 'success');
+        await addDoc(collection(db, "notifications"), {
+          type: "meal_registration",
+          message: `${user.name} đã báo cơm cho ${SHIFT_NAMES[shift]} thuộc bộ phận ${userRole}.`,
+          targetRoles: ["admin", "ehs"],
+          readBy: [],
+          createdBy: user.uid || "",
+          timestamp: serverTimestamp()
+        });
       } catch (e) {
         console.error(e);
         pushToast('Lưu không thành công.', 'error');
@@ -694,6 +711,14 @@ function AdminView({ user, reportData, selectedDateKey, onDeptClick, onOpenExpor
       await batch.commit();
       const alreadySentBefore = !!reportData?.[shift]?.confirmedByAdmin;
       pushToast(`${alreadySentBefore ? 'Đã gửi lại' : 'Đã gửi'} ${SHIFT_NAMES[shift]} cho Nhà Ăn.`, 'success');
+      await addDoc(collection(db, "notifications"), {
+        type: "meal_registration",
+        message: `Aldila đã ${alreadySentBefore ? 'cập nhật và gửi lại' : 'gửi'} số liệu cơm ${SHIFT_NAMES[shift]} cho Nhà Ăn.`,
+        targetRoles: ["Nhà Ăn"],
+        readBy: [],
+        createdBy: user.uid || "",
+        timestamp: serverTimestamp()
+      });
     } catch (e) {
       console.error(e);
       pushToast('Xác nhận thất bại.', 'error');
@@ -883,6 +908,14 @@ function CanteenView({ user, reportData, selectedDateKey, isMobile }) {
   const { pushToast } = useToast();
   const { askConfirm } = useConfirm();
 
+  const Delta = ({ diff }) => {
+    if (!diff) return null;
+    const up = diff > 0;
+    const color = up ? '#16a34a' : '#dc2626';
+    const arrow = up ? '▲' : '▼';
+    return <span style={{ marginLeft: 6, color, fontWeight: 700 }}>{arrow} {Math.abs(diff)}</span>;
+  };
+
   // Tên hiển thị của tài khoản Nhà ăn (ưu tiên tên đầy đủ nếu có)
   const canteenName = useMemo(() => user?.name || user?.displayName || 'Nhà Ăn', [user]);
 
@@ -976,6 +1009,14 @@ function CanteenView({ user, reportData, selectedDateKey, isMobile }) {
         lastHistoryAt: serverTimestamp()
       });
       pushToast(`Đã xác nhận ${SHIFT_NAMES[shift]}.`, 'success');
+      await addDoc(collection(db, "notifications"), {
+        type: "meal_registration",
+        message: `Nhà Ăn đã ${actionText} suất ăn ca ${SHIFT_NAMES[shift]}.`,
+        targetRoles: ["admin", "ehs"],
+        readBy: [],
+        createdBy: user.uid || "",
+        timestamp: serverTimestamp()
+      });
     } catch (e) {
       console.error(e);
       pushToast('Xác nhận thất bại.', 'error');
@@ -1012,6 +1053,14 @@ function CanteenView({ user, reportData, selectedDateKey, isMobile }) {
         }),
       });
       pushToast(`Đã ${actionText} cho ${dept}.`, 'success');
+      await addDoc(collection(db, "notifications"), {
+        type: "meal_registration",
+        message: `Nhà Ăn đã ${actionText} ${miToFulfill} mì và ${suaToFulfill} sữa tăng ca cho bộ phận ${dept} (${SHIFT_NAMES[shift]}).`,
+        targetRoles: ["admin", "ehs", dept],
+        readBy: [],
+        createdBy: user.uid || "",
+        timestamp: serverTimestamp()
+      });
     } catch (e) {
       console.error(e);
       pushToast('Thao tác thất bại.', 'error');
@@ -1097,7 +1146,8 @@ function CanteenView({ user, reportData, selectedDateKey, isMobile }) {
                         <tr key={k}>
                           <td style={{ padding: 8, border: '1px solid #f0f0f0' }}>{label}</td>
                           <td style={{ padding: 8, border: '1px solid #f0f0f0', textAlign: 'center', fontWeight: 700 }}>
-                            {data.displaySummary?.[k] || 0}
+                            {data.summary?.[k] || 0}
+                            <Delta diff={isConfirmed && data.needsReconfirmation ? (Number(data.summary?.[k] || 0) - Number(data.confirmedSummary?.[k] || 0)) : 0} />
                           </td>
                         </tr>
                       ))}
@@ -1171,6 +1221,46 @@ function CanteenView({ user, reportData, selectedDateKey, isMobile }) {
           </React.Fragment>
         );
       })}
+
+      {/* Lịch sử hoạt động báo cơm của ngày */}
+      <h3 style={{ marginTop: 28, marginBottom: 12, color: colors.primary, borderBottom: `2px solid ${colors.primaryLight || '#E88E2E'}`, paddingBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+        📋 Lịch sử thay đổi & xác nhận trong ngày
+      </h3>
+      
+      {(!reportData?.history || reportData.history.length === 0) ? (
+        <div style={{ padding: 16, background: '#fafafa', border: '1px solid #e0e0e0', borderRadius: 12, color: '#666', textAlign: 'center' }}>
+          Chưa ghi nhận lịch sử hoạt động nào trong ngày.
+        </div>
+      ) : (
+        <div style={{ overflowX: 'auto', border: '1px solid #ddd', borderRadius: 12, background: 'white', maxHeight: 350, overflowY: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead style={{ background: '#f5f5f5', position: 'sticky', top: 0, zIndex: 1 }}>
+              <tr style={{ borderBottom: '1px solid #ddd' }}>
+                <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 'bold' }}>Thời điểm</th>
+                <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 'bold' }}>Ca</th>
+                <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 'bold' }}>Hành động</th>
+                <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 'bold' }}>Chi tiết thay đổi</th>
+                <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 'bold' }}>Người thực hiện (Bộ phận)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...reportData.history]
+                .sort((a, b) => (b.timestampMs || 0) - (a.timestampMs || 0))
+                .map((h, idx) => (
+                  <tr key={idx} style={{ borderBottom: '1px solid #eee' }}>
+                    <td style={{ padding: '10px 12px', color: '#666', whiteSpace: 'nowrap' }}>{fmtTime(h.timestampMs)}</td>
+                    <td style={{ padding: '10px 12px', color: '#333', fontWeight: 600 }}>{SHIFT_NAMES[h.shift] || h.shift || '-'}</td>
+                    <td style={{ padding: '10px 12px', color: colors.primary, fontWeight: 600 }}>{h.action || '-'}</td>
+                    <td style={{ padding: '10px 12px', color: '#444' }}>{h.details || '-'}</td>
+                    <td style={{ padding: '10px 12px', color: '#555', fontWeight: 500 }}>
+                      {h.user} <span style={{ color: '#888', fontSize: 11 }}>({h.role})</span>
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -1393,14 +1483,20 @@ export default function BaoCom({ user, isMobile }) {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [openDept, setOpenDept] = useState(null);
   const [showExport, setShowExport] = useState(false);
-  // Tab bộ phận hiện tại khi user có nhiều bộ phận
+  // Tab bộ phận hiện tại khi user có nhiều bộ phận hoặc là Admin/EHS xem tất cả các bộ phận
   const [activeDeptTab, setActiveDeptTab] = useState(0);
+  const [adminTab, setAdminTab] = useState('summary'); // 'summary' (Tổng hợp & Gửi Nhà Ăn) hoặc 'depts' (Báo cơm từng Bộ phận dưới dạng mini tabs)
 
   const selectedDateKey = dateKey(selectedDate);
   const prevStatusRef = useRef({});
 
   const userRoles = user?.role ? (Array.isArray(user?.role) ? user.role.map(r => String(r).toLowerCase()) : [String(user.role).toLowerCase()]) : [];
   const rawRoles = user?.role ? (Array.isArray(user?.role) ? user.role : [user.role]) : [];
+
+  // Role ưu tiên để xác định giao diện chính (admin/ehs/Nhà Ăn)
+  const isAdmin = userRoles.includes('admin') || userRoles.includes('ehs');
+  const isCanteen = rawRoles.includes('Nhà Ăn');
+  const rawRole = rawRoles[0] || '';
 
   // Xác định tất cả các role bộ phận mà user có (có thể nhiều hơn 1)
   const deptRoles = rawRoles.filter(r => DEPARTMENTS.includes(r));
@@ -1409,17 +1505,16 @@ export default function BaoCom({ user, isMobile }) {
   const isProxy = userRoles.includes('ehs committee') && user?.mealDept && DEPARTMENTS.includes(user.mealDept);
 
   // Nếu là proxy (ehs committee với mealDept), thêm mealDept vào danh sách bộ phận nếu chưa có
+  // Với Admin/EHS, effectiveDeptRoles sẽ chứa tất cả các bộ phận để hiển thị dưới dạng tab nhỏ (trừ Nhà Ăn)
   const effectiveDeptRoles = useMemo(() => {
+    if (isAdmin) {
+      return DEPARTMENTS;
+    }
     if (isProxy && !deptRoles.includes(user.mealDept)) {
       return [user.mealDept, ...deptRoles];
     }
     return deptRoles;
-  }, [isProxy, deptRoles, user?.mealDept]);
-
-  // Role ưu tiên để xác định giao diện chính (admin/ehs/Nhà Ăn)
-  const isAdmin = userRoles.includes('admin') || userRoles.includes('ehs');
-  const isCanteen = rawRoles.includes('Nhà Ăn');
-  const rawRole = rawRoles[0] || '';
+  }, [isAdmin, isProxy, deptRoles, user?.mealDept]);
 
   // Lắng nghe dữ liệu báo cáo của ngày được chọn (real-time)
   useEffect(() => {
@@ -1472,14 +1567,86 @@ export default function BaoCom({ user, isMobile }) {
   if (loading) {
     content = <div>{t("loading.meals")}</div>;
   } else if (isAdmin) {
-    content = <AdminView 
-      user={user}
-      reportData={reportData}
-      selectedDateKey={selectedDateKey}
-      onDeptClick={setOpenDept}
-      onOpenExport={() => setShowExport(true)}
-      isMobile={isMobile}
-    />;
+    content = (
+      <div>
+        {/* Admin/EHS Main Tab Switcher */}
+        <div style={{ display: 'flex', gap: 10, marginBottom: 20, borderBottom: '1px solid #ddd', paddingBottom: 10 }}>
+          <button
+            onClick={() => setAdminTab('summary')}
+            style={{
+              padding: '8px 16px',
+              border: 'none',
+              borderRadius: 20,
+              background: adminTab === 'summary' ? colors.primary : '#f5f5f5',
+              color: adminTab === 'summary' ? '#fff' : '#333',
+              fontWeight: 600,
+              cursor: 'pointer'
+            }}
+          >
+            📊 Tổng hợp & Gửi Nhà Ăn
+          </button>
+          <button
+            onClick={() => setAdminTab('depts')}
+            style={{
+              padding: '8px 16px',
+              border: 'none',
+              borderRadius: 20,
+              background: adminTab === 'depts' ? colors.primary : '#f5f5f5',
+              color: adminTab === 'depts' ? '#fff' : '#333',
+              fontWeight: 600,
+              cursor: 'pointer'
+            }}
+          >
+            🏢 Báo cơm từng Bộ phận
+          </button>
+        </div>
+
+        {adminTab === 'summary' ? (
+          <AdminView 
+            user={user}
+            reportData={reportData}
+            selectedDateKey={selectedDateKey}
+            onDeptClick={(dept) => {
+              setOpenDept(dept);
+            }}
+            onOpenExport={() => setShowExport(true)}
+            isMobile={isMobile}
+          />
+        ) : (
+          <div>
+            {/* Tab nhỏ chọn bộ phận */}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
+              {effectiveDeptRoles.map((dept, idx) => (
+                <button
+                  key={dept}
+                  onClick={() => setActiveDeptTab(idx)}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: 16,
+                    border: activeDeptTab === idx ? 'none' : '1px solid #ddd',
+                    background: activeDeptTab === idx ? colors.primary : '#f5f5f5',
+                    color: activeDeptTab === idx ? '#fff' : colors.textPrimary,
+                    fontWeight: activeDeptTab === idx ? 700 : 400,
+                    cursor: 'pointer',
+                    fontSize: 13,
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {dept}
+                </button>
+              ))}
+            </div>
+            {/* Render DepartmentView cho bộ phận đang chọn */}
+            <DepartmentView
+              key={effectiveDeptRoles[activeDeptTab] || effectiveDeptRoles[0]}
+              user={{ ...user, role: effectiveDeptRoles[activeDeptTab] || effectiveDeptRoles[0] }}
+              reportData={reportData}
+              selectedDateKey={selectedDateKey}
+            />
+          </div>
+        )}
+      </div>
+    );
   } else if (isCanteen) {
     content = <CanteenView
       user={user}

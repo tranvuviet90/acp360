@@ -17,7 +17,27 @@ export async function callAIService(prompt, history = [], fallbackUrl) {
 
     if (snap.exists()) {
       const config = snap.data();
-      const { provider, model, apiKey } = config;
+      const { provider, model, apiKey, systemInstruction, trainedDocs } = config;
+
+      // Kết hợp chỉ dẫn hệ thống với các tài liệu đã huấn luyện để làm tri thức nền
+      const DEFAULT_SYSTEM_INSTRUCTION = "Bạn là một nhân viên thuộc bộ phận EHS (An toàn, Sức khỏe và Môi trường) của nhà máy SafeOne. Hãy xưng hô và trả lời một cách tự nhiên, thân thiện và chân thực như một người đồng nghiệp thật sự.\n\n" +
+        "Nguyên tắc trả lời:\n" +
+        "1. Lối nói ngắn gọn, súc tích, dễ hiểu và đi thẳng vào vấn đề. Tránh dài dòng hoặc quá phức tạp.\n" +
+        "2. Sử dụng tiếng Việt lịch sự, thể hiện tinh thần hỗ trợ và trách nhiệm cao về an toàn lao động.\n" +
+        "3. Khi trả lời, hãy ưu tiên tuyệt đối dựa trên các thông tin được cung cấp trong phần tài liệu huấn luyện (Knowledge Base) nếu có.\n\n" +
+        "Xử lý khi thông tin vượt ngoài phạm vi huấn luyện:\n" +
+        "- Nếu câu hỏi của người dùng nằm ngoài các tài liệu đã được huấn luyện hoặc chỉ dẫn an toàn nội bộ:\n" +
+        "  * Hãy gợi ý một cách lịch sự rằng họ nên liên hệ trực tiếp với bộ phận EHS của nhà máy để nhận được hướng dẫn chính thức và rõ ràng nhất.\n" +
+        "  * Đồng thời, hãy gợi ý thêm rằng trong thời gian chờ đợi phản hồi trực tiếp từ bộ phận EHS, bạn (với vai trò chatbot hỗ trợ) vẫn có thể cung cấp cho họ một số thông tin tham khảo nhanh dựa trên cơ sở dữ liệu AI tổng hợp của mình.";
+
+      let fullSystemInstruction = systemInstruction && systemInstruction.trim() !== "" ? systemInstruction : DEFAULT_SYSTEM_INSTRUCTION;
+      if (Array.isArray(trainedDocs) && trainedDocs.length > 0) {
+        fullSystemInstruction += "\n\n=== TÀI LIỆU HUẤN LUYỆN KHÁCH HÀNG / KNOWLEDGE BASE ===\n";
+        trainedDocs.forEach(d => {
+          fullSystemInstruction += `\n[Tài liệu: ${d.name}]\n${d.content}\n[Kết thúc tài liệu: ${d.name}]\n`;
+        });
+        fullSystemInstruction += "\nBạn hãy sử dụng các thông tin và tài liệu hướng dẫn trên để trả lời các câu hỏi của người dùng một cách chính xác nhất. Nếu thông tin không có trong tài liệu và cũng không có trong chỉ dẫn của bạn, hãy trả lời dựa trên kiến thức chung nhưng phải lịch sự và chuyên nghiệp.";
+      }
 
       // Nếu có đầy đủ API Key và Nhà cung cấp hợp lệ
       if (apiKey && apiKey.trim() !== "" && apiKey !== "MOCKED_SAVED_KEY") {
@@ -27,7 +47,6 @@ export async function callAIService(prompt, history = [], fallbackUrl) {
           const url = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${apiKey}`;
 
           // Format tin nhắn từ history sang Gemini format
-          // Gemini role: "user" | "model"
           const contents = history.map(h => ({
             role: h.role === 'assistant' || h.role === 'model' ? 'model' : 'user',
             parts: Array.isArray(h.parts) ? h.parts : [{ text: h.parts?.[0]?.text || h.text || "" }]
@@ -39,10 +58,17 @@ export async function callAIService(prompt, history = [], fallbackUrl) {
             parts: [{ text: prompt }]
           });
 
+          const reqBody = { contents };
+          if (fullSystemInstruction && fullSystemInstruction.trim() !== "") {
+            reqBody.systemInstruction = {
+              parts: [{ text: fullSystemInstruction }]
+            };
+          }
+
           const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents })
+            body: JSON.stringify(reqBody)
           });
 
           if (!response.ok) {
@@ -58,13 +84,25 @@ export async function callAIService(prompt, history = [], fallbackUrl) {
           const openaiModel = model || 'gpt-4o-mini';
           
           // Format tin nhắn từ history sang OpenAI format
-          // OpenAI role: "user" | "assistant" | "system"
-          const messages = history.map(h => ({
-            role: h.role === 'model' || h.role === 'assistant' ? 'assistant' : 'user',
-            content: typeof h.text === 'string' ? h.text : (h.parts?.[0]?.text || "")
-          }));
+          const messages = [];
 
-          // Thêm tin nhắn hiện tại vào
+          // Thêm system instruction ở đầu nếu có
+          if (fullSystemInstruction && fullSystemInstruction.trim() !== "") {
+            messages.push({
+              role: "system",
+              content: fullSystemInstruction
+            });
+          }
+
+          // Thêm lịch sử trò chuyện
+          history.forEach(h => {
+            messages.push({
+              role: h.role === 'model' || h.role === 'assistant' ? 'assistant' : 'user',
+              content: typeof h.text === 'string' ? h.text : (h.parts?.[0]?.text || "")
+            });
+          });
+
+          // Thêm tin nhắn hiện tại
           messages.push({
             role: "user",
             content: prompt

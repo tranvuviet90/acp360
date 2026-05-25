@@ -35,6 +35,14 @@ export default function UserManager({ user, isMobile }) {
   const [newPassword, setNewPassword] = useState('');
   const [roleModal, setRoleModal] = useState(null); // { uid, currentRoles }
   const [selectedRoles, setSelectedRoles] = useState([]);
+
+  // Helper: parse role thành mảng, bất kể lưu dạng string hay array
+  const parseRoles = (role) => {
+    if (!role) return [];
+    if (Array.isArray(role)) return role;
+    // Nếu là chuỗi nhiều role phân cách bằng dấu phẩy (ví dụ: "G_Cutting, admin, ehs")
+    return role.split(',').map(r => r.trim()).filter(Boolean);
+  };
   const [createAccountModal, setCreateAccountModal] = useState(false);
   const [newAccountData, setNewAccountData] = useState({ name: '', email: '', password: '', role: 'Nhà Ăn', customRole: '' });
   
@@ -47,9 +55,15 @@ export default function UserManager({ user, isMobile }) {
   const [aiProvider, setAiProvider] = useState('google');
   const [aiModel, setAiModel] = useState('gemini-2.0-flash');
   const [apiKey, setApiKey] = useState('');
+  const [systemInstruction, setSystemInstruction] = useState('');
   const [hasSavedKey, setHasSavedKey] = useState(false);
   const [saveStatus, setSaveStatus] = useState('');
   const [isSavingKey, setIsSavingKey] = useState(false);
+
+  // Trained documents for Chatbot
+  const [trainedDocs, setTrainedDocs] = useState([]);
+  const [viewingDoc, setViewingDoc] = useState(null);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -92,6 +106,8 @@ export default function UserManager({ user, isMobile }) {
         const data = docSnap.data();
         setAiProvider(data.provider || 'google');
         setAiModel(data.model || 'gemini-2.0-flash');
+        setSystemInstruction(data.systemInstruction || '');
+        setTrainedDocs(data.trainedDocs || []);
         if (data.apiKey) {
           setApiKey('MOCKED_SAVED_KEY');
           setHasSavedKey(true);
@@ -102,6 +118,8 @@ export default function UserManager({ user, isMobile }) {
       } else {
         setAiProvider('google');
         setAiModel('gemini-2.0-flash');
+        setSystemInstruction('');
+        setTrainedDocs([]);
         setApiKey('');
         setHasSavedKey(false);
       }
@@ -134,7 +152,7 @@ export default function UserManager({ user, isMobile }) {
       }, { merge: true });
 
       setSaveStatus('Lưu thành công!');
-      pushToast('Cấu hình AI đã được cập nhật!', 'success');
+      pushToast('Cấu hình API Key đã được cập nhật!', 'success');
       if (finalKey) {
         setApiKey('MOCKED_SAVED_KEY');
         setHasSavedKey(true);
@@ -151,11 +169,124 @@ export default function UserManager({ user, isMobile }) {
     }
   };
 
+  const handleSaveSystemInstruction = async (e) => {
+    e.preventDefault();
+    setIsSavingKey(true);
+    setSaveStatus('Đang lưu...');
+    try {
+      const docRef = doc(db, 'settings', 'ai_config');
+      await setDoc(docRef, {
+        systemInstruction: systemInstruction,
+        updatedAt: new Date()
+      }, { merge: true });
+      setSaveStatus('Lưu chỉ dẫn thành công!');
+      pushToast('Chỉ dẫn hệ thống đã được cập nhật!', 'success');
+    } catch (err) {
+      console.error("Error saving system instruction:", err);
+      setSaveStatus('Lỗi khi lưu chỉ dẫn.');
+      pushToast(err.message || 'Lỗi khi lưu chỉ dẫn.', 'error');
+    } finally {
+      setIsSavingKey(false);
+    }
+  };
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Validate file extension
+    const allowedExtensions = ['txt', 'md', 'csv', 'json'];
+    const fileExtension = file.name.split('.').pop().toLowerCase();
+    if (!allowedExtensions.includes(fileExtension)) {
+      pushToast('Định dạng tệp không hợp lệ. Chỉ hỗ trợ .txt, .md, .csv, .json.', 'error');
+      e.target.value = '';
+      return;
+    }
+
+    // Limit file size to 500KB
+    if (file.size > 500 * 1024) {
+      pushToast('Tệp quá lớn. Vui lòng tải tệp dưới 500KB để đảm bảo hiệu năng.', 'error');
+      e.target.value = '';
+      return;
+    }
+
+    setUploadingDoc(true);
+    setSaveStatus('Đang đọc tệp tin...');
+
+    try {
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const content = event.target.result;
+        
+        const newDoc = {
+          name: file.name,
+          size: file.size,
+          type: file.type || 'text/plain',
+          uploadedAt: new Date().toLocaleDateString('vi-VN') + ' ' + new Date().toLocaleTimeString('vi-VN'),
+          content: content
+        };
+
+        const updatedDocs = [...trainedDocs, newDoc];
+        const docRef = doc(db, 'settings', 'ai_config');
+        
+        await setDoc(docRef, {
+          trainedDocs: updatedDocs
+        }, { merge: true });
+
+        setTrainedDocs(updatedDocs);
+        pushToast('Nạp tài liệu huấn luyện thành công!', 'success');
+        setSaveStatus('Huấn luyện thành công!');
+      };
+      
+      reader.onerror = (err) => {
+        console.error(err);
+        pushToast('Lỗi khi đọc nội dung tệp.', 'error');
+        setSaveStatus('Lỗi đọc tệp.');
+      };
+
+      reader.readAsText(file, "UTF-8");
+    } catch (err) {
+      console.error(err);
+      pushToast('Lỗi trong quá trình nạp tài liệu.', 'error');
+      setSaveStatus('Lỗi nạp tài liệu.');
+    } finally {
+      setUploadingDoc(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleDeleteDoc = async (indexToDelete) => {
+    if (!(await askConfirm("Bạn có chắc chắn muốn xóa tài liệu huấn luyện này?", "Xác nhận xóa tài liệu"))) return;
+    
+    try {
+      const updatedDocs = trainedDocs.filter((_, idx) => idx !== indexToDelete);
+      const docRef = doc(db, 'settings', 'ai_config');
+      
+      await setDoc(docRef, {
+        trainedDocs: updatedDocs
+      }, { merge: true });
+
+      setTrainedDocs(updatedDocs);
+      pushToast('Đã xóa tài liệu khỏi bộ nhớ chatbot!', 'success');
+    } catch (err) {
+      console.error("Lỗi khi xóa tài liệu:", err);
+      pushToast('Không thể xóa tài liệu. Vui lòng thử lại.', 'error');
+    }
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
   useEffect(() => {
     fetchRequests(); // Luôn load requests khi mount để hiện badge số lượng
     if (activeTab === 'users') fetchUsers();
     else if (activeTab === 'requests') fetchRequests();
-    else if (activeTab === 'apikey') fetchAIConfig();
+    else if (activeTab === 'apikey' || activeTab === 'train') fetchAIConfig();
   }, [activeTab]);
 
   const handleAdminAction = async (action, targetUid, data = {}) => {
@@ -233,6 +364,12 @@ export default function UserManager({ user, isMobile }) {
             style={{ padding: '8px 16px', background: activeTab === 'apikey' ? colors.primary : '#f0f0f0', color: activeTab === 'apikey' ? 'white' : '#333', border: 'none', borderRadius: 20, cursor: 'pointer', fontWeight: 600 }}
           >
             🔑 API Key
+          </button>
+          <button 
+            onClick={() => setActiveTab('train')}
+            style={{ padding: '8px 16px', background: activeTab === 'train' ? colors.primary : '#f0f0f0', color: activeTab === 'train' ? 'white' : '#333', border: 'none', borderRadius: 20, cursor: 'pointer', fontWeight: 600 }}
+          >
+            🤖 Huấn luyện Chatbot
           </button>
         </div>
         {activeTab === 'users' && (
@@ -319,7 +456,7 @@ export default function UserManager({ user, isMobile }) {
                           setResetPassModal(u.uid);
                         } else if (act === 'changeRole') {
                           setRoleModal({ uid: u.uid, currentRoles: u.role });
-                          setSelectedRoles(u.role ? (Array.isArray(u.role) ? u.role : [u.role]) : []);
+                          setSelectedRoles(parseRoles(u.role));
                         } else if (act === 'enable') {
                           handleAdminAction('enable', u.uid);
                         } else if (act === 'disable') {
@@ -384,7 +521,7 @@ export default function UserManager({ user, isMobile }) {
                       <td style={tdStyle}>
                         <button onClick={() => { setRenameModal({ uid: u.uid, currentName: u.name }); setNewName(u.name || ''); }} style={{ ...btnStyle, background: '#10b981' }}>Đổi tên</button>
                         <button onClick={() => setResetPassModal(u.uid)} style={{ ...btnStyle, background: '#f59e0b' }}>{t('manager.action.resetPass')}</button>
-                        <button onClick={() => { setRoleModal({ uid: u.uid, currentRoles: u.role }); setSelectedRoles(u.role ? (Array.isArray(u.role) ? u.role : [u.role]) : []); }} style={{ ...btnStyle, background: '#3b82f6' }}>{t('manager.action.changeRole')}</button>
+                        <button onClick={() => { setRoleModal({ uid: u.uid, currentRoles: u.role }); setSelectedRoles(parseRoles(u.role)); }} style={{ ...btnStyle, background: '#3b82f6' }}>{t('manager.action.changeRole')}</button>
                         
                         {u.disabled ? (
                           <button onClick={() => handleAdminAction('enable', u.uid)} style={{ ...btnStyle, background: '#10b981' }}>{t('manager.action.enable')}</button>
@@ -597,6 +734,148 @@ export default function UserManager({ user, isMobile }) {
         </form>
       )}
 
+      {/* Tab: HUẤN LUYỆN CHATBOT */}
+      {!loading && activeTab === 'train' && (
+        <div style={{ background: '#fafafa', border: '1px solid #e0e0e0', borderRadius: 12, padding: 24, marginTop: 10 }}>
+          <h3 style={{ marginTop: 0, color: colors.primary, borderBottom: '1px solid #eee', paddingBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+            🤖 Huấn luyện & Thiết lập Chatbot
+          </h3>
+
+          {/* Section: System Prompt */}
+          <form onSubmit={handleSaveSystemInstruction} style={{ marginBottom: 30 }}>
+            <h4 style={{ margin: '0 0 10px 0', color: '#333', fontSize: 15, fontWeight: 700 }}>
+              1. Chỉ dẫn hệ thống & Phong cách phản hồi (System Instructions)
+            </h4>
+            <div style={{ marginBottom: 12 }}>
+              <textarea 
+                value={systemInstruction} 
+                onChange={e => setSystemInstruction(e.target.value)}
+                placeholder="Nhập các quy định, tài liệu nội bộ, thông tin hướng dẫn nghiệp vụ hoặc phong cách xưng hô cho Chatbot tại đây... (Ví dụ: 'Bạn là trợ lý EHS của nhà máy SafeOne. Hãy trả lời lịch sự bằng tiếng Việt. Khi trả lời về gemba thì...')"
+                rows={6}
+                style={{ width: '100%', padding: '12px', borderRadius: 8, border: '1px solid #ccc', boxSizing: 'border-box', fontFamily: 'inherit', fontSize: 14 }}
+              />
+              <p style={{ margin: '5px 0 0', fontSize: 12, color: '#666' }}>
+                * Chỉ dẫn hệ thống giúp định hình tính cách, vai trò và phạm vi trả lời của AI trợ lý.
+              </p>
+            </div>
+
+            {saveStatus && (
+              <div style={{ 
+                marginBottom: 12, 
+                padding: '8px 12px', 
+                borderRadius: 6, 
+                background: saveStatus.includes('thành công') ? '#e8f5e9' : '#fff3e0',
+                color: saveStatus.includes('thành công') ? '#2e7d32' : '#e65100',
+                fontSize: 13,
+                fontWeight: 600
+              }}>
+                {saveStatus}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button 
+                type="submit" 
+                disabled={isSavingKey} 
+                style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: colors.primary, color: 'white', fontWeight: 'bold', cursor: 'pointer', opacity: isSavingKey ? 0.6 : 1 }}
+              >
+                {isSavingKey ? 'Đang lưu...' : 'Lưu chỉ dẫn hệ thống'}
+              </button>
+            </div>
+          </form>
+
+          <hr style={{ border: 'none', borderTop: '1px solid #eee', margin: '24px 0' }} />
+
+          {/* Section: Upload Documents */}
+          <div>
+            <h4 style={{ margin: '0 0 8px 0', color: '#333', fontSize: 15, fontWeight: 700 }}>
+              2. Nạp tài liệu tri thức nội bộ (.txt, .md, .csv, .json)
+            </h4>
+            <p style={{ margin: '0 0 16px 0', fontSize: 13, color: '#555' }}>
+              Tải lên tài liệu quy định, quy trình vận hành hoặc cẩm nang hướng dẫn để Chatbot tự động phân tích và trả lời dựa trên dữ liệu thực tế này.
+            </p>
+
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 20 }}>
+              <label 
+                htmlFor="train-file-upload" 
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '10px 20px',
+                  background: uploadingDoc ? '#9ca3af' : '#10b981',
+                  color: 'white',
+                  borderRadius: 8,
+                  fontWeight: 'bold',
+                  cursor: uploadingDoc ? 'not-allowed' : 'pointer',
+                  fontSize: 14,
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                  transition: 'background 0.2s'
+                }}
+              >
+                {uploadingDoc ? '⏳ Đang đọc & nạp tài liệu...' : '📁 Tải tài liệu lên (.txt, .md, .csv, .json)'}
+              </label>
+              <input 
+                type="file" 
+                id="train-file-upload" 
+                accept=".txt,.md,.csv,.json" 
+                onChange={handleFileUpload} 
+                disabled={uploadingDoc}
+                style={{ display: 'none' }}
+              />
+              <span style={{ fontSize: 12, color: '#888' }}>(Tệp tin tối đa 500KB)</span>
+            </div>
+
+            {/* List of Documents */}
+            <h5 style={{ margin: '0 0 10px 0', fontSize: 14, color: '#333', fontWeight: 600 }}>
+              Tài liệu đã được học ({trainedDocs.length})
+            </h5>
+
+            {trainedDocs.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '30px 20px', color: '#666', border: '2px dashed #ddd', borderRadius: 8, background: '#fdfdfd' }}>
+                Chưa có tài liệu huấn luyện nào. Hãy tải lên tài liệu tri thức đầu tiên để bắt đầu huấn luyện AI!
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto', border: '1px solid #ddd', borderRadius: 8, background: 'white' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: '#f5f5f5', borderBottom: '1px solid #ddd' }}>
+                      <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 'bold' }}>Tên tệp</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 'bold', width: 100 }}>Dung lượng</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 'bold', width: 180 }}>Ngày nạp</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 'bold', width: 140 }}>Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {trainedDocs.map((doc, idx) => (
+                      <tr key={idx} style={{ borderBottom: '1px solid #eee' }}>
+                        <td style={{ padding: '10px 12px', color: '#333', fontWeight: 600, wordBreak: 'break-all' }}>📄 {doc.name}</td>
+                        <td style={{ padding: '10px 12px', color: '#666' }}>{formatFileSize(doc.size)}</td>
+                        <td style={{ padding: '10px 12px', color: '#666' }}>{doc.uploadedAt}</td>
+                        <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                          <button 
+                            onClick={() => setViewingDoc(doc)}
+                            style={{ padding: '4px 10px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer', marginRight: 6, fontSize: 12, fontWeight: 600 }}
+                          >
+                            👁️ Xem
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteDoc(idx)}
+                            style={{ padding: '4px 10px', background: '#ef4444', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                          >
+                            🗑️ Xóa
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* MODALS */}
       {createAccountModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
@@ -722,6 +1001,29 @@ export default function UserManager({ user, isMobile }) {
                 style={{ padding: '8px 16px', border: 'none', borderRadius: 6, background: colors.primary, color: 'white', fontWeight: 'bold', cursor: 'pointer', opacity: selectedRoles.length === 0 ? 0.5 : 1 }}
               >
                 Lưu
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Xem Tài Liệu Huấn Luyện */}
+      {viewingDoc && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+          <div style={{ background: 'white', padding: 24, borderRadius: 12, width: '90%', maxWidth: 700, maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+            <h3 style={{ marginTop: 0, borderBottom: '1px solid #eee', paddingBottom: 10, color: colors.primary, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>👁️ Chi tiết tài liệu: {viewingDoc.name}</span>
+              <span style={{ fontSize: 13, color: '#666' }}>({formatFileSize(viewingDoc.size)})</span>
+            </h3>
+            <div style={{ flex: 1, overflowY: 'auto', background: '#f5f5f5', padding: 16, borderRadius: 8, fontFamily: 'monospace', fontSize: 13, whiteSpace: 'pre-wrap', border: '1px solid #ddd', margin: '12px 0' }}>
+              {viewingDoc.content}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button 
+                onClick={() => setViewingDoc(null)} 
+                style={{ padding: '8px 20px', border: 'none', borderRadius: 6, background: colors.primary, color: 'white', fontWeight: 'bold', cursor: 'pointer' }}
+              >
+                Đóng
               </button>
             </div>
           </div>
