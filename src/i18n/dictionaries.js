@@ -210,13 +210,13 @@ export const DICTS = {
     "chatbot.placeholder": "Nhập câu hỏi...",
 
     // MagicMenu
-    "menu.gemba": "Gemba",
-    "menu.tugemba": "Tự Gemba",
+    "menu.gemba": "Daily Audit",
+    "menu.tugemba": "Gemba",
     "menu.walkietalkie": "Bộ đàm",
     "menu.shift": "Phân ca",
-    "menu.smoking": "Hút thuốc",
-    "menu.break": "Giải lao",
-    "menu.trash": "Nhà rác",
+    "menu.smoking": "Giám Sát Hút Thuốc",
+    "menu.break": "Giám Sát khu vực Giải Lao",
+    "menu.trash": "Giám Sát Nhà Rác",
     "menu.meal": "Báo cơm",
 
     // BaoCom
@@ -495,13 +495,13 @@ export const DICTS = {
     "chatbot.placeholder": "Enter your question...",
 
     // MagicMenu
-    "menu.gemba": "Gemba",
-    "menu.tugemba": "Self Gemba",
+    "menu.gemba": "Daily Audit",
+    "menu.tugemba": "Gemba",
     "menu.walkietalkie": "Walkie-talkie",
     "menu.shift": "Shifts",
-    "menu.smoking": "Smoking",
-    "menu.break": "Break",
-    "menu.trash": "Trash",
+    "menu.smoking": "Smoking Monitor",
+    "menu.break": "Break Area Monitor",
+    "menu.trash": "Trash Monitor",
     "menu.meal": "Meal Order",
 
     // BaoCom

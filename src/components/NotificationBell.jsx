@@ -2,6 +2,53 @@ import React, { useEffect, useState, useRef, useCallback, useMemo } from "react"
 import { collection, query, where, onSnapshot, doc, updateDoc, arrayUnion, writeBatch } from "firebase/firestore";
 import { db } from "../firebase";
 import { colors } from "../theme";
+import { useToast } from "./LightboxSwipeOnly";
+
+const DEPARTMENTS = [
+  "G_Cutting","G_Rolling","G_Finishing","G_Dipping","G_Buffing","G_Graphics",
+  "G_QC","A_QC","QC_Management","Kayak","A_Rolling","A_Cosmetics","Planning",
+  "Kho VW","WH_SK","WH_FG","WH_EM","WH_AG","Apple","MTN","Paint Blending",
+  "Engineering","MFG","Bảo Vệ","Tạp Vụ","Office"
+];
+
+const NOTIFICATION_TYPES_CONFIG = [
+  {
+    type: "new_gemba_error",
+    label: "🚨 Báo cáo sự cố Gemba",
+    desc: "Nhận thông báo khi có sự cố Gemba mới phát sinh cần kiểm tra.",
+    roles: ["admin", "ehs"]
+  },
+  {
+    type: "new_tu_gemba_error",
+    label: "💡 Báo cáo Tự Gemba",
+    desc: "Nhận thông báo khi có báo cáo Tự Gemba mới được ghi nhận.",
+    roles: ["admin", "ehs", ...DEPARTMENTS]
+  },
+  {
+    type: "bodam_assign",
+    label: "📻 Giao nhận Bộ đàm",
+    desc: "Thông báo khi bạn được bàn giao hoặc thu hồi bộ đàm nhiệm vụ.",
+    roles: ["admin", "ehs", "Bảo Vệ"]
+  },
+  {
+    type: "shift_reminder",
+    label: "🗓️ Ca làm việc & Nhắc nhở ca",
+    desc: "Nhận nhắc nhở đăng ký ca làm việc tuần mới và lịch phân ca.",
+    roles: ["admin", "ehs", "ehs committee"]
+  },
+  {
+    type: "role_request",
+    label: "👤 Yêu cầu thay đổi chức vụ",
+    desc: "Nhận thông báo khi thành viên gửi yêu cầu xin thay đổi chức vụ.",
+    roles: ["admin"]
+  },
+  {
+    type: "meal_registration",
+    label: "🍽️ Báo cơm & Suất ăn",
+    desc: "Nhận thông báo khi có thay đổi, điều chỉnh cơm hoặc Nhà Ăn đã phát mì/sữa.",
+    roles: ["admin", "ehs", "Nhà Ăn", ...DEPARTMENTS]
+  }
+];
 
 const getWeekNumber = (d) => {
   const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
@@ -177,6 +224,43 @@ export default function NotificationBell({ user, setActiveTab }) {
   const dropdownRef = useRef(null);
   
   const [toastQueue, setToastQueue] = useState([]); 
+
+  const { pushToast } = useToast();
+
+  const [settings, setSettings] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`notif_settings_${user?.uid}`);
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+  const [showSettings, setShowSettings] = useState(false);
+
+  // Sync settings when user changes
+  useEffect(() => {
+    if (user?.uid) {
+      try {
+        const saved = localStorage.getItem(`notif_settings_${user.uid}`);
+        setSettings(saved ? JSON.parse(saved) : {});
+      } catch {
+        setSettings({});
+      }
+    }
+  }, [user]);
+
+  const isNotifTypeEnabled = useCallback((type) => {
+    let targetType = type;
+    if (type === "shift_assign" || type === "shift_note") {
+      targetType = "shift_reminder";
+    }
+    return settings[targetType] !== false;
+  }, [settings]);
+
+  const settingsRef = useRef(settings);
+  useEffect(() => {
+    settingsRef.current = settings;
+  }, [settings]);
   
   // Tích hợp 2 lớp khiên: Cuốn sổ lưu ID và Thẻ báo cáo initialLoad
   const seenIdsRef = useRef(new Set()); 
@@ -224,12 +308,21 @@ export default function NotificationBell({ user, setActiveTab }) {
         return;
       }
 
+      const isNotifTypeEnabledRef = (type) => {
+        let targetType = type;
+        if (type === "shift_assign" || type === "shift_note") {
+          targetType = "shift_reminder";
+        }
+        return settingsRef.current[targetType] !== false;
+      };
+
       // Lọc thông báo mới, chưa đọc, và KHÔNG phải do chính mình tạo
       const newNotifs = list
         .filter(n => !seenIdsRef.current.has(n.id))
         .filter(n =>
           !(n.readBy || []).includes(user.uid) && // chưa đọc
-          n.createdBy !== user.uid                // không phải do mình tạo
+          n.createdBy !== user.uid &&             // không phải do mình tạo
+          isNotifTypeEnabledRef(n.type)          // chưa bị tắt
         );
 
       newNotifs.forEach(n => {
@@ -250,12 +343,21 @@ export default function NotificationBell({ user, setActiveTab }) {
         return;
       }
 
+      const isNotifTypeEnabledRef = (type) => {
+        let targetType = type;
+        if (type === "shift_assign" || type === "shift_note") {
+          targetType = "shift_reminder";
+        }
+        return settingsRef.current[targetType] !== false;
+      };
+
       // Lọc thông báo mới, chưa đọc, và KHÔNG phải do chính mình tạo
       const newNotifs = list
         .filter(n => !seenIdsRef.current.has(n.id))
         .filter(n =>
           !(n.readBy || []).includes(user.uid) && // chưa đọc
-          n.createdBy !== user.uid                // không phải do mình tạo
+          n.createdBy !== user.uid &&             // không phải do mình tạo
+          isNotifTypeEnabledRef(n.type)          // chưa bị tắt
         );
 
       newNotifs.forEach(n => {
@@ -275,10 +377,20 @@ export default function NotificationBell({ user, setActiveTab }) {
   // Logic nhắc nhở chọn ca
   useEffect(() => {
     if (!user || !user.name) return;
+
+    // CHỈ áp dụng thông báo cho users có vai trò là "ehs committee"
+    const userRoleNormalized = (user.role || "").toLowerCase();
+    if (userRoleNormalized !== "ehs committee") {
+      setLocalNotifications([]);
+      return;
+    }
+
     const today = new Date();
     const dayOfWeek = today.getDay(); 
+    const hour = today.getHours();
     
-    if (dayOfWeek === 4 || dayOfWeek === 5 || dayOfWeek === 6 || dayOfWeek === 0) {
+    // CHỈ nhận thông báo từ 08:00 sáng Chủ nhật hàng tuần (dayOfWeek === 0 và hour >= 8)
+    if (dayOfWeek === 0 && hour >= 8) {
       const nextWeekDate = new Date();
       nextWeekDate.setDate(today.getDate() + 7);
       const nextWeekId = `${nextWeekDate.getFullYear()}-${getWeekNumber(nextWeekDate)}`;
@@ -326,8 +438,11 @@ export default function NotificationBell({ user, setActiveTab }) {
   }, []);
 
   // Lọc thông báo do chính mình tạo — không hiển thị trong dropdown lẫn toast
+  // Và lọc bỏ các thông báo đã xem/đọc rồi để không hiện lại nữa
   const allNotifications = [...localNotifications, ...dbNotifications]
     .filter(n => !n.createdBy || n.createdBy !== user.uid)
+    .filter(n => !(n.readBy || []).includes(user.uid))
+    .filter(n => isNotifTypeEnabled(n.type))
     .sort((a, b) => {
     const tA = a.isLocal ? a.timestamp : (a.timestamp?.seconds * 1000 || 0);
     const tB = b.isLocal ? b.timestamp : (b.timestamp?.seconds * 1000 || 0);
@@ -428,16 +543,57 @@ export default function NotificationBell({ user, setActiveTab }) {
           zIndex: 1000,
           padding: "10px 0"
         }}>
-          <div style={{ padding: "0 15px 10px", borderBottom: "1px solid #eee", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontWeight: "bold", fontSize: 18, color: colors.primary }}>Thông báo</span>
-            {unreadCount > 0 && (
+          <div style={{ padding: "5px 15px 10px", borderBottom: "1px solid #eee", display: "flex", flexDirection: "column", gap: 6 }}>
+            <div style={{ fontWeight: "bold", fontSize: 18, color: colors.primary, marginBottom: 4 }}>Thông báo</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
               <button
                 onClick={markAllAsRead}
-                style={{ fontSize: 12, color: colors.primary, background: "transparent", border: `1px solid ${colors.primary}`, borderRadius: 12, padding: "3px 10px", cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  fontSize: 13.5,
+                  color: "#333",
+                  background: "transparent",
+                  border: "none",
+                  padding: "6px 8px",
+                  borderRadius: 6,
+                  cursor: "pointer",
+                  width: "100%",
+                  textAlign: "left",
+                  fontWeight: 500,
+                  transition: "all 0.15s"
+                }}
+                onMouseOver={(e) => { e.currentTarget.style.background = "#f5f5f5"; e.currentTarget.style.color = colors.primary; }}
+                onMouseOut={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#333"; }}
               >
-                ✓ Đánh dấu tất cả đã đọc
+                <span style={{ fontSize: 15, fontWeight: "bold", color: colors.primary }}>✓</span> Đánh dấu tất cả là đã đọc
               </button>
-            )}
+              
+              <button
+                onClick={() => { setShowSettings(true); setIsOpen(false); }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  fontSize: 13.5,
+                  color: "#333",
+                  background: "transparent",
+                  border: "none",
+                  padding: "6px 8px",
+                  borderRadius: 6,
+                  cursor: "pointer",
+                  width: "100%",
+                  textAlign: "left",
+                  fontWeight: 500,
+                  transition: "all 0.15s"
+                }}
+                onMouseOver={(e) => { e.currentTarget.style.background = "#f5f5f5"; e.currentTarget.style.color = colors.primary; }}
+                onMouseOut={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#333"; }}
+              >
+                <span style={{ fontSize: 15, color: colors.primary }}>⚙️</span> Cài đặt thông báo
+              </button>
+            </div>
           </div>
           {allNotifications.length === 0 ? (
             <div style={{ padding: 20, textAlign: "center", color: "#888" }}>Không có thông báo nào</div>
@@ -505,6 +661,111 @@ export default function NotificationBell({ user, setActiveTab }) {
         }}
       />
     ))}
+
+    {/* ===== MODAL CÀI ĐẶT THÔNG BÁO ===== */}
+    {showSettings && (
+      <div style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,.5)",
+        display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10000
+      }}>
+        <div style={{
+          background: "#fff", padding: 24, borderRadius: 16,
+          width: "min(460px, 95vw)", boxShadow: "0 10px 40px rgba(0,0,0,.2)",
+          display: "flex", flexDirection: "column", gap: 18
+        }}>
+          <h3 style={{ margin: 0, color: colors.primary, display: "flex", alignItems: "center", gap: 8, borderBottom: "1.5px solid #eee", paddingBottom: 10 }}>
+            <span>⚙️</span> Cài đặt thông báo
+          </h3>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 14, maxHeight: "55vh", overflowY: "auto", paddingRight: 4 }}>
+            {(() => {
+              const userRoles = Array.isArray(user?.role) ? user.role : [user?.role || ""];
+              const userRolesLower = userRoles.map(r => String(r).toLowerCase());
+              
+              const applicableTypes = NOTIFICATION_TYPES_CONFIG.filter(cfg => {
+                return cfg.roles.some(r => userRolesLower.includes(r.toLowerCase()));
+              });
+
+              if (applicableTypes.length === 0) {
+                return <p style={{ margin: 0, color: "#666", fontSize: 14 }}>Chức vụ của bạn không có cấu hình thông báo nào áp dụng.</p>;
+              }
+
+              return applicableTypes.map(cfg => {
+                const isEnabled = settings[cfg.type] !== false;
+                return (
+                  <div
+                    key={cfg.type}
+                    style={{
+                      display: "flex", alignItems: "flex-start", gap: 12,
+                      padding: "10px 12px", borderRadius: 8, background: "#f8fafc",
+                      border: "1px solid #e2e8f0"
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      id={`chk-${cfg.type}`}
+                      checked={isEnabled}
+                      onChange={(e) => {
+                        const val = e.target.checked;
+                        setSettings(prev => ({ ...prev, [cfg.type]: val }));
+                      }}
+                      style={{ width: 18, height: 18, marginTop: 3, cursor: "pointer", accentColor: colors.primary }}
+                    />
+                    <label htmlFor={`chk-${cfg.type}`} style={{ cursor: "pointer", flex: 1 }}>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: "#1e293b", marginBottom: 2 }}>{cfg.label}</div>
+                      <div style={{ fontSize: 12.5, color: "#64748b", lineHeight: 1.4 }}>{cfg.desc}</div>
+                    </label>
+                  </div>
+                );
+              });
+            })()}
+          </div>
+
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", borderTop: "1.5px solid #eee", paddingTop: 14 }}>
+            <button
+              onClick={() => {
+                // Hủy: khôi phục từ localStorage
+                try {
+                  const saved = localStorage.getItem(`notif_settings_${user?.uid}`);
+                  setSettings(saved ? JSON.parse(saved) : {});
+                } catch {}
+                setShowSettings(false);
+              }}
+              style={{ padding: "8px 16px", borderRadius: 8, border: "1.5px solid #ccc", background: "#eee", fontWeight: 600, cursor: "pointer" }}
+            >
+              Hủy
+            </button>
+            <button
+              onClick={async () => {
+                // Lưu
+                try {
+                  localStorage.setItem(`notif_settings_${user?.uid}`, JSON.stringify(settings));
+                  
+                  // Đồng bộ Firestore dạng best-effort
+                  try {
+                    await updateDoc(doc(db, "users", user.uid), {
+                      notificationSettings: settings
+                    });
+                  } catch (fsErr) {
+                    console.warn("Firestore sync warning (Security Rules might restrict write):", fsErr);
+                  }
+                  
+                  pushToast("Đã lưu cài đặt thông báo thành công!", "success");
+                } catch (e) {
+                  console.error(e);
+                  pushToast("Lỗi khi lưu cài đặt.", "error");
+                } finally {
+                  setShowSettings(false);
+                }
+              }}
+              style={{ padding: "8px 20px", background: colors.primary, color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, cursor: "pointer" }}
+            >
+              Lưu thay đổi
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     </>
   );
 }

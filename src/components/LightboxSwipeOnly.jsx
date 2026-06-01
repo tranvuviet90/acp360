@@ -39,72 +39,96 @@ export function ToastProvider({ children }) {
       <div
         style={{
           position: "fixed",
-          bottom: "15%",
-          left: "50%",
-          transform: "translateX(-50%)",
+          bottom: 24,
+          right: 24,
           zIndex: 9999,
           display: "grid",
-          gap: 14,
-          maxWidth: "min(92vw, 420px)",
+          gap: 12,
+          maxWidth: "min(90vw, 360px)",
         }}
       >
+        <style>{`
+          @keyframes toastSlideIn {
+            from { transform: translateX(50px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+          }
+        `}</style>
         {toasts.map((t) => (
           <div
             key={t.id}
             style={{
-              background:
+              background: "#ffffff",
+              color: "#222222",
+              borderLeft: `5px solid ${
                 t.type === "error"
-                  ? "#fee2e2"
+                  ? "#dc2626"
                   : t.type === "success"
-                  ? "#ecfdf5"
-                  : "#eff6ff",
-              color:
-                t.type === "error"
-                  ? "#991b1b"
-                  : t.type === "success"
-                  ? "#065f46"
-                  : "#1e3a8a",
-              border: `1px solid ${
-                t.type === "error"
-                  ? "#fecaca"
-                  : t.type === "success"
-                  ? "#bbf7d0"
-                  : "#bfdbfe"
+                  ? "#16a34a"
+                  : "#1f80e0"
               }`,
-              borderRadius: 14,
+              borderRadius: 12,
               padding: "14px 16px",
-              boxShadow: "0 6px 20px rgba(0,0,0,.18)",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.15), 0 2px 8px rgba(0,0,0,0.08)",
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 12,
+              minWidth: 280,
+              maxWidth: 360,
+              position: "relative",
+              animation: "toastSlideIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards"
             }}
           >
             <div
               style={{
+                background:
+                  t.type === "error"
+                    ? "#fee2e2"
+                    : t.type === "success"
+                    ? "#e6f4ea"
+                    : "#e8f0fe",
+                borderRadius: "50%",
+                width: 32,
+                height: 32,
                 display: "flex",
-                justifyContent: "space-between",
                 alignItems: "center",
-                gap: 14,
+                justifyContent: "center",
+                fontSize: 16,
+                flexShrink: 0,
               }}
             >
-              <div style={{ fontWeight: 700, fontSize: 16 }}>
-                {t.type === "error"
-                  ? "⚠️ Lỗi"
-                  : t.type === "success"
-                  ? "✅ Thành công"
-                  : "🔔 Thông báo"}
-              </div>
-              <button
-                onClick={() => removeToast(t.id)}
-                style={{
-                  border: 0,
-                  background: "transparent",
-                  cursor: "pointer",
-                  fontSize: 20,
-                  lineHeight: 1,
-                }}
-              >
-                ×
-              </button>
+              {t.type === "error" ? "🚨" : t.type === "success" ? "✅" : "🔔"}
             </div>
-            <div style={{ marginTop: 8, fontSize: 15 }}>{t.msg}</div>
+
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: 14, color: "#111", marginBottom: 3 }}>
+                {t.type === "error"
+                  ? "Cảnh báo"
+                  : t.type === "success"
+                  ? "Thành công"
+                  : "Thông báo"}
+              </div>
+              <div style={{ fontSize: 13, color: "#444", lineHeight: 1.45 }}>{t.msg}</div>
+            </div>
+
+            <button
+              onClick={() => removeToast(t.id)}
+              style={{
+                border: 0,
+                background: "transparent",
+                cursor: "pointer",
+                fontSize: 16,
+                color: "#aaa",
+                lineHeight: 1,
+                padding: 0,
+                alignSelf: "flex-start",
+                marginTop: -2,
+                transition: "color 0.2s"
+              }}
+              onMouseOver={(e) => e.currentTarget.style.color = "#333"}
+              onMouseOut={(e) => e.currentTarget.style.color = "#aaa"}
+            >
+              ✕
+            </button>
           </div>
         ))}
       </div>
