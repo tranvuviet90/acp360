@@ -14,6 +14,7 @@ import {
   IoEyeOutline, 
   IoFileTrayOutline
 } from "react-icons/io5";
+import BookViewer3D from "./BookViewer3D";
 
 // Helper normalization functions for roles
 const stripDiacritics = (s = "") => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -802,119 +803,14 @@ export default function DocumentManager({ user, isMobile }) {
         </div>
       )}
 
-      {/* PDF View Modal Overlay */}
+      {/* PDF View Modal Overlay - Trình xem sách 3D */}
       {viewingDoc && (
-        <div style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: "rgba(0, 0, 0, 0.75)",
-          backdropFilter: "blur(4px)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 9999,
-          padding: isMobile ? 0 : 24,
-          boxSizing: "border-box"
-        }}>
-          <div style={{
-            background: colors.white,
-            width: "100%",
-            height: "100%",
-            maxWidth: 1000,
-            maxHeight: 800,
-            borderRadius: isMobile ? 0 : 16,
-            overflow: "hidden",
-            display: "flex",
-            flexDirection: "column",
-            boxShadow: "0 24px 64px rgba(0,0,0,0.3)"
-          }}>
-            {/* Modal Header */}
-            <div style={{
-              padding: "16px 20px",
-              borderBottom: `1px solid ${colors.border}`,
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              background: colors.background
-            }}>
-              <div style={{ minWidth: 0, marginRight: 16 }}>
-                <h3 style={{ 
-                  margin: 0, 
-                  color: colors.primaryDark, 
-                  fontSize: 16, 
-                  fontWeight: 700,
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis"
-                }}>
-                  {viewingDoc.title}
-                </h3>
-                <span style={{ fontSize: 12, color: colors.textSecondary, display: "block", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
-                  File: {viewingDoc.fileName}
-                </span>
-              </div>
-
-              {/* Control Buttons */}
-              <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-                {/* Open in new tab fallback */}
-                <button
-                  onClick={() => window.open(viewingDoc.fileUrl, "_blank")}
-                  style={{
-                    background: "transparent",
-                    border: `1.5px solid ${colors.primary}`,
-                    borderRadius: 8,
-                    padding: "6px 12px",
-                    color: colors.primary,
-                    fontSize: 13,
-                    fontWeight: 600,
-                    cursor: "pointer"
-                  }}
-                  onMouseOver={(e) => {
-                    e.currentTarget.style.background = colors.primary;
-                    e.currentTarget.style.color = colors.white;
-                  }}
-                  onMouseOut={(e) => {
-                    e.currentTarget.style.background = "transparent";
-                    e.currentTarget.style.color = colors.primary;
-                  }}
-                >
-                  Mở tab mới
-                </button>
-
-                {/* Close Button */}
-                <button
-                  onClick={() => setViewingDoc(null)}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    color: colors.textPrimary,
-                    fontSize: 24,
-                    display: "flex",
-                    alignItems: "center",
-                    padding: 4
-                  }}
-                >
-                  <IoCloseOutline />
-                </button>
-              </div>
-            </div>
-
-            {/* Modal Body: PDF Iframe */}
-            <div style={{ flexGrow: 1, background: "#525659", position: "relative" }}>
-              <iframe
-                src={`${viewingDoc.fileUrl}#toolbar=1`}
-                title={viewingDoc.title}
-                width="100%"
-                height="100%"
-                style={{ border: "none" }}
-              />
-            </div>
-          </div>
-        </div>
+        <BookViewer3D
+          fileUrl={viewingDoc.fileUrl}
+          title={viewingDoc.title}
+          onClose={() => setViewingDoc(null)}
+          isMobile={isMobile}
+        />
       )}
     </div>
   );
