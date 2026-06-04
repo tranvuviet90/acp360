@@ -159,6 +159,23 @@ function CaLamViec({ user, isMobile }) {
   const today = new Date();
   const isSundayMorning = today.getDay() === 0 && today.getHours() < 12;
 
+  const [selectedTargetUser, setSelectedTargetUser] = useState(user?.name || "");
+
+  useEffect(() => {
+    if (user?.name) {
+      setSelectedTargetUser(user.name);
+    }
+  }, [user]);
+
+  const targetUsersList = useMemo(() => {
+    return allUsers
+      .filter((u) => {
+        const r = u.role?.toLowerCase() || "";
+        return ["admin", "ehs"].includes(r);
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [allUsers]);
+
   const ehsCommitteeMembers = useMemo(
     () => allUsers
       .filter((u) => u.role?.toLowerCase() === "ehs committee")
@@ -389,12 +406,12 @@ function CaLamViec({ user, isMobile }) {
   };
 
   const handleShiftChange = async (dayId, newShift) => {
-    if (!currentUserName || !canUpdateShift) return;
+    if (!selectedTargetUser || !canUpdateShift) return;
     const docRef = doc(db, "weekly_shifts", weekId);
     try {
       await setDoc(
         docRef,
-        { [currentUserName]: { [dayId]: newShift } },
+        { [selectedTargetUser]: { [dayId]: newShift } },
         { merge: true }
       );
     } catch (error) {
@@ -830,8 +847,28 @@ function CaLamViec({ user, isMobile }) {
 
       <div style={{ background: "#f5f5f5", borderRadius: 8, padding: isMobile ? 10 : 15, marginBottom: 20 }}>
         <h3 style={{ marginTop: 0, fontSize: isMobile ? 16 : 20 }}>
-          {t("shifts.myWeek").replace("{week}", getWeekNumber(weekDates[0]))}
+          {canPlanBoard 
+            ? `Phân ca làm việc (Tuần ${getWeekNumber(weekDates[0])})` 
+            : t("shifts.myWeek").replace("{week}", getWeekNumber(weekDates[0]))}
         </h3>
+        {canPlanBoard && (
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: "block", marginBottom: 6, fontWeight: "bold", fontSize: 14 }}>
+              Chọn nhân sự để phân ca:
+            </label>
+            <select
+              value={selectedTargetUser}
+              onChange={(e) => setSelectedTargetUser(e.target.value)}
+              style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid #ccc", minWidth: 200, fontSize: 14 }}
+            >
+              {targetUsersList.map((u) => (
+                <option key={u.id} value={u.name}>
+                  {u.name} ({u.role})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         {isEhsCommittee && isSundayMorning && (
           <div style={{
             background: "#fff3cd", color: "#856404", border: "1px solid #ffeeba",
@@ -844,15 +881,16 @@ function CaLamViec({ user, isMobile }) {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "10px" }}>
           {weekDates.map((day) => {
             const dayId = formatDateToId(day);
+            const canEditThisUser = canPlanBoard || selectedTargetUser === currentUserName;
             return (
               <div key={dayId}>
                 <div style={{ fontWeight: "bold", marginBottom: 4, fontSize: isMobile ? 13 : 14 }}>
                   {day.toLocaleDateString("vi-VN", { weekday: "short", day: "2-digit", month: "2-digit" })}
                 </div>
                 <select
-                  value={userShifts[currentUserName]?.[dayId] || ""}
+                  value={userShifts[selectedTargetUser]?.[dayId] || ""}
                   onChange={(e) => handleShiftChange(dayId, e.target.value)}
-                  disabled={!canUpdateShift}
+                  disabled={!canEditThisUser}
                   style={{ width: "100%", padding: "8px", borderRadius: 6, border: "1px solid #ccc" }}
                 >
                   <option value="">{t("shifts.selectShift")}</option>

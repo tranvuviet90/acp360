@@ -40,7 +40,7 @@ function UndoIcon({ size = 20 }) {
 }
 // ===============================================================
 
-function HutThuocToilet({ user }) {
+function GiamSatHutThuoc({ user }) {
   const { t } = useI18n();
   const { askConfirm } = useConfirm();
   const [selected, setSelected] = useState([]);
@@ -311,4 +311,4 @@ function HutThuocToilet({ user }) {
   );
 }
 
-export default HutThuocToilet;
+export default GiamSatHutThuoc;

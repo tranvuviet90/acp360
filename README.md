@@ -8,9 +8,9 @@
 
 ### 🌟 Tính năng chính
 1. **Gemba Checklist & Tự Gemba**: Ghi nhận và chấm điểm lỗi trực quan, chụp ảnh báo cáo vi phạm/cải tiến an toàn, xuất báo cáo CAP (Corrective Action Plan) theo khoảng ngày linh hoạt.
-2. **Bộ đàm & Chat Giải lao (Bodam & GiaiLaoChat)**: Kênh truyền thông tin liên lạc và trao đổi nội bộ thời gian thực cho nhân viên và ban giám sát.
-3. **Báo cơm (BaoCom)**: Luồng kiểm duyệt 2 chiều chặt chẽ giữa **Bộ phận (gửi)** ➡️ **EHS (duyệt & chuyển tiếp)** ➡️ **Nhà ăn (xác nhận chốt suất)**.
-4. **Giám sát chuyên biệt**: Theo dõi vi phạm hút thuốc ngoài khu vực quy định (`HutThuocToilet`) và quản lý vệ sinh khu vực rác thải sản xuất (`GiamSatNhaRac`).
+2. **Bộ đàm & Giám sát Giải lao (Bodam & GiamSatGiaiLao)**: Kênh truyền thông tin liên lạc và trao đổi nội bộ thời gian thực cho nhân viên và ban giám sát.
+3. **Báo cơm (BaoCom)**: Luồng kiểm duyệt 2 chiều chắt chẽ giữa **Bộ phận (gửi)** ➡️ **EHS (duyệt & chuyển tiếp)** ➡️ **Nhà ăn (xác nhận chốt suất)**.
+4. **Giám sát chuyên biệt**: Theo dõi vi phạm hút thuốc ngoài khu vực quy định (`GiamSatHutThuoc`) và quản lý vệ sinh khu vực rác thải sản xuất (`GiamSatNhaRac`).
 5. **Trợ lý ảo EHS AI Chatbot**: Sử dụng mô hình **Gemini 2.5 Flash** tiên tiến, được huấn luyện bằng tài liệu kiến thức EHS chuẩn chỉnh của nhà máy và hướng dẫn sử dụng website.
 
 ### 🛠️ Công nghệ cốt lõi
@@ -128,9 +128,9 @@ Nếu bạn muốn đổi từ tên miền mặc định của Firebase (`.web.a
 
 ### 🌟 Key Features
 1. **Gemba & Self-Gemba Checklists**: Real-time safety/quality observation logger with dynamic scoring, photo attachments, and selective date-range CAP (Corrective Action Plan) Excel exports.
-2. **Walkie-Talkie & Break Chat (Bodam & GiaiLaoChat)**: Instant interior communication channels for field coordinators and staff.
+2. **Walkie-Talkie & Break Chat (Bodam & GiamSatGiaiLao)**: Instant interior communication channels for field coordinators and staff.
 3. **Meal Registration (BaoCom)**: Structured 2-way approval pipeline: **Department (Request)** ➡️ **EHS (Approve & Forward)** ➡️ **Canteen (Confirm)**.
-4. **Targeted Safety Compliance**: Monitoring illegal smoking zones (`HutThuocToilet`) and factory waste station cleanliness (`GiamSatNhaRac`).
+4. **Targeted Safety Compliance**: Monitoring illegal smoking zones (`GiamSatHutThuoc`) and factory waste station cleanliness (`GiamSatNhaRac`).
 5. **AI Chatbot EHS Assistant**: Powered by **Gemini 2.5 Flash**, natively fine-tuned with rigorous factory EHS handbooks and software layout guides.
 
 ### 🛠️ Technology Stack

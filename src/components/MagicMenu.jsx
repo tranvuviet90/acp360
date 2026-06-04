@@ -15,6 +15,7 @@ import {
   IoCafeOutline,
   IoTrash,
   IoRestaurantOutline,
+  IoDocumentsOutline,
 } from "react-icons/io5";
 import { MdSmokingRooms } from "react-icons/md";
 import { FaWalkieTalkie } from "react-icons/fa6";
@@ -34,6 +35,11 @@ const ALL_ITEMS = [
   { key: "menu.trash", Icon: IoTrash },
   { key: "menu.meal", Icon: IoRestaurantOutline },
   { key: "manager.title", Icon: FiUsers, roles: ["admin"] },
+  {
+    key: "menu.documents",
+    Icon: IoDocumentsOutline,
+    roles: ["admin", "ehs", "ehs committee", "trainer", "manager"],
+  },
 ];
 
 // CHANGED: Đã sửa "Q_QC" thành "G_QC"

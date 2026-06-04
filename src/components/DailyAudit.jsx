@@ -1,4 +1,4 @@
-// File: GembaCheckList.jsx (Phiên bản đã sửa lỗi hoàn chỉnh)
+// File: DailyAudit.jsx (Phiên bản đã sửa lỗi hoàn chỉnh)
 // Đã có key={dep.name} và các sửa lỗi khác.
 
 import React, { useState, useEffect, useRef } from "react";
@@ -1016,9 +1016,9 @@ function GembaReportDashboard({ onClose, departments, allDeptScores, selectedMon
 }
 
 /* =========================
-   Component chính GembaCheckList
+   Component chính DailyAudit
    ========================= */
-function GembaCheckList({ user, isMobile, newErrorCounts, setGembaNotifCounts }) {
+function DailyAudit({ user, isMobile, newErrorCounts, setGembaNotifCounts }) {
   const { t } = useI18n();
   const { askConfirm } = useConfirm();
   const [depIndex, setDepIndex] = useState(0);
@@ -1718,11 +1718,11 @@ function GembaCheckList({ user, isMobile, newErrorCounts, setGembaNotifCounts })
 
 // ====================== CLEANUP FUNCTION ======================
 async function runCleanup() {
-    const sevenMonthsAgo = new Date();
-    sevenMonthsAgo.setMonth(sevenMonthsAgo.getMonth() - 7);
-    const sevenMonthsAgoTimestamp = Timestamp.fromDate(sevenMonthsAgo);
+    const oneYearAgo = new Date();
+    oneYearAgo.setMonth(oneYearAgo.getMonth() - 12);
+    const oneYearAgoTimestamp = Timestamp.fromDate(oneYearAgo);
     try {
-        const oldEventsQuery = query(collection(db, "gemba_events"), where("timestamp", "<=", sevenMonthsAgoTimestamp));
+        const oldEventsQuery = query(collection(db, "gemba_events"), where("timestamp", "<=", oneYearAgoTimestamp));
         const oldEventsSnap = await getDocs(oldEventsQuery);
         let batch = writeBatch(db); let count = 0;
         for (const doc of oldEventsSnap.docs) {
@@ -1738,7 +1738,7 @@ async function runCleanup() {
                 const imagesToDelete = [];
                 const recentScores = scores.filter(score => {
                     const scoreDate = safeTsToDate(score.timestamp);
-                    if (scoreDate && scoreDate < sevenMonthsAgo) {
+                    if (scoreDate && scoreDate < oneYearAgo) {
                         const allImages = [...(score.imageUrls || []), ...(score.imageUrl ? [score.imageUrl] : []), ...(score.improvementImageUrl ? [score.improvementImageUrl] : [])];
                         imagesToDelete.push(...allImages);
                         return false;
@@ -1761,4 +1761,4 @@ async function runCleanup() {
     } catch (error) { console.error("Lỗi trong quá trình cleanup Gemba:", error); }
 }
 
-export default GembaCheckList;
+export default DailyAudit;

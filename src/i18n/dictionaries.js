@@ -218,6 +218,7 @@ export const DICTS = {
     "menu.break": "Giám Sát khu vực Giải Lao",
     "menu.trash": "Giám Sát Nhà Rác",
     "menu.meal": "Báo cơm",
+    "menu.documents": "Tài liệu",
 
     // BaoCom
     "baoCom.title": "Báo cơm ngày",
@@ -503,6 +504,7 @@ export const DICTS = {
     "menu.break": "Break Area Monitor",
     "menu.trash": "Trash Monitor",
     "menu.meal": "Meal Order",
+    "menu.documents": "Documents",
 
     // BaoCom
     "baoCom.title": "Daily Meal Order",

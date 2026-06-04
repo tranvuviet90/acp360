@@ -2,16 +2,17 @@
 // Đã thêm logic để không fetch-count nếu là vai trò 'Bộ phận' hoặc 'Nhà Ăn'
 import React, { useState, useEffect } from "react";
 import Login from "./components/Login";
-import GembaCheckList from "./components/gembachecklist";
-import TuGemba from "./components/TuGemba";
+import DailyAudit from "./components/DailyAudit";
+import Gemba from "./components/Gemba";
 import Bodam from "./components/Bodam";
 import Calamviec from "./components/Calamviec";
-import HutThuocToilet from "./components/HutThuocToilet";
-import GiaiLaoChat from "./components/GiaiLaoChat";
+import GiamSatHutThuoc from "./components/GiamSatHutThuoc";
+import GiamSatGiaiLao from "./components/GiamSatGiaiLao";
 import GiamSatNhaRac from "./components/GiamSatNhaRac";
 import BaoCom from "./components/BaoCom";
 import UserSettings from "./components/UserSettings";
 import UserManager from "./components/UserManager";
+import DocumentManager from "./components/DocumentManager";
 import NotificationBell from "./components/NotificationBell";
 import logo from "./assets/logo.png";
 import { auth, db } from "./firebase";
@@ -286,20 +287,21 @@ export default function App() {
           <div style={{ width: "100%" }}>
             {/* THÊM BỌC ĐIỀU KIỆN CHO TAB 0 VÀ 1 */}
             {!isRestrictedRole && (
-              <div style={tabStyle(0)}>{shouldMount(0) && <GembaCheckList user={user} isMobile={isMobile} newErrorCounts={gembaNotifCounts} setGembaNotifCounts={setGembaNotifCounts} />}</div>
+              <div style={tabStyle(0)}>{shouldMount(0) && <DailyAudit user={user} isMobile={isMobile} newErrorCounts={gembaNotifCounts} setGembaNotifCounts={setGembaNotifCounts} />}</div>
             )}
             {!isRestrictedRole && (
-              <div style={tabStyle(1)}>{shouldMount(1) && <TuGemba user={user} isMobile={isMobile} newLogCounts={tuGembaNotifCounts} setTuGembaNotifCounts={setTuGembaNotifCounts} />}</div>
+              <div style={tabStyle(1)}>{shouldMount(1) && <Gemba user={user} isMobile={isMobile} newLogCounts={tuGembaNotifCounts} setTuGembaNotifCounts={setTuGembaNotifCounts} />}</div>
             )}
             
             {/* CÁC TAB CÒN LẠI GIỮ NGUYÊN */}
             <div style={tabStyle(2)}>{shouldMount(2) && <Bodam user={user} isMobile={isMobile} />}</div>
             <div style={tabStyle(3)}>{shouldMount(3) && <Calamviec user={user} isMobile={isMobile} />}</div>
-            <div style={tabStyle(4)}>{shouldMount(4) && <HutThuocToilet user={user} isMobile={isMobile} />}</div>
-            <div style={tabStyle(5)}>{shouldMount(5) && <GiaiLaoChat user={user} isMobile={isMobile} />}</div>
+            <div style={tabStyle(4)}>{shouldMount(4) && <GiamSatHutThuoc user={user} isMobile={isMobile} />}</div>
+            <div style={tabStyle(5)}>{shouldMount(5) && <GiamSatGiaiLao user={user} isMobile={isMobile} />}</div>
             <div style={tabStyle(6)}>{shouldMount(6) && <GiamSatNhaRac user={user} isMobile={isMobile} />}</div>
             <div style={tabStyle(7)}>{shouldMount(7) && <BaoCom user={user} isMobile={isMobile} />}</div>
             <div style={tabStyle(8)}>{shouldMount(8) && (user?.role === "admin" ? <UserManager user={user} isMobile={isMobile} /> : <div style={{padding:20}}>Access Denied</div>)}</div>
+            <div style={tabStyle(9)}>{shouldMount(9) && <DocumentManager user={user} isMobile={isMobile} />}</div>
           </div>
         </div>
 

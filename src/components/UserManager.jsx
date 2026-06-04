@@ -7,7 +7,7 @@ import { useToast, useConfirm } from './LightboxSwipeOnly';
 import { colors } from '../theme';
 
 const ALL_ROLES = [
-  "admin", "ehs", "ehs committee", "manager", "Nhà Ăn",
+  "admin", "ehs", "ehs committee", "trainer", "manager", "Nhà Ăn",
   "G_Cutting","G_Rolling","G_Finishing","G_Dipping","G_Buffing","G_Graphics",
   "G_QC","A_QC","QC_Management","Kayak","A_Rolling","A_Cosmetics","Planning",
   "Kho VW","WH_SK","WH_FG","WH_EM","WH_AG","Apple","MTN","Paint Blending",

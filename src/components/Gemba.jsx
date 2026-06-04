@@ -1,4 +1,4 @@
-// File: TuGemba.jsx (Phiên bản đồng bộ logic Gemba, lược bỏ tính điểm, dùng trực tiếp collection tu_gemba_logs để tránh lỗi 403)
+// File: Gemba.jsx (Phiên bản đồng bộ logic Gemba, lược bỏ tính điểm, dùng trực tiếp collection tu_gemba_logs để tránh lỗi 403)
 
 import React, { useState, useEffect, useRef } from "react";
 import { db, storage } from "../firebase";
@@ -482,9 +482,9 @@ function ImprovementModal({ modalData, onClose, onSave }) {
 }
 
 /* =========================
-   Component chính TuGemba
+   Component chính Gemba
    ========================= */
-function TuGemba({ user, isMobile, newLogCounts, setTuGembaNotifCounts }) {
+function Gemba({ user, isMobile, newLogCounts, setTuGembaNotifCounts }) {
   const { t } = useI18n();
   const { askConfirm } = useConfirm();
   const [depIndex, setDepIndex] = useState(0);
@@ -1056,11 +1056,11 @@ function TuGemba({ user, isMobile, newLogCounts, setTuGembaNotifCounts }) {
 
 // ====================== CLEANUP FUNCTION ======================
 async function runCleanup() {
-    const sevenMonthsAgo = new Date();
-    sevenMonthsAgo.setMonth(sevenMonthsAgo.getMonth() - 7);
-    const sevenMonthsAgoTimestamp = Timestamp.fromDate(sevenMonthsAgo);
+    const oneYearAgo = new Date();
+    oneYearAgo.setMonth(oneYearAgo.getMonth() - 12);
+    const oneYearAgoTimestamp = Timestamp.fromDate(oneYearAgo);
     try {
-        const oldLogsQuery = query(collection(db, "tu_gemba_logs"), where("timestamp", "<=", sevenMonthsAgoTimestamp));
+        const oldLogsQuery = query(collection(db, "tu_gemba_logs"), where("timestamp", "<=", oneYearAgoTimestamp));
         const oldLogsSnap = await getDocs(oldLogsQuery);
         if (oldLogsSnap.empty) return;
         let batch = writeBatch(db); let count = 0;
@@ -1085,4 +1085,4 @@ async function runCleanup() {
     } catch (error) { console.error("Lỗi trong quá trình cleanup Tự Gemba:", error); }
 }
 
-export default TuGemba;
+export default Gemba;

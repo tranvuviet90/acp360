@@ -37,7 +37,7 @@ function UndoIcon({ size = 20 }) {
 }
 // ===============================================================
 
-function GiaiLaoChat({ user }) {
+function GiamSatGiaiLao({ user }) {
   const { t } = useI18n();
   const { askConfirm } = useConfirm();
   const [chat, setChat] = useState([]);
@@ -247,4 +247,4 @@ function GiaiLaoChat({ user }) {
     </div>
   );
 }
-export default GiaiLaoChat;
+export default GiamSatGiaiLao;
