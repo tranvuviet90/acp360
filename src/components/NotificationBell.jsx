@@ -438,19 +438,20 @@ export default function NotificationBell({ user, setActiveTab }) {
   }, []);
 
   // Lọc thông báo do chính mình tạo — không hiển thị trong dropdown lẫn toast
-  // Và lọc bỏ các thông báo đã xem/đọc rồi để không hiện lại nữa
-  const allNotifications = [...localNotifications, ...dbNotifications]
+  const filteredNotifications = [...localNotifications, ...dbNotifications]
     .filter(n => !n.createdBy || n.createdBy !== user.uid)
-    .filter(n => !(n.readBy || []).includes(user.uid))
     .filter(n => isNotifTypeEnabled(n.type))
     .sort((a, b) => {
-    const tA = a.isLocal ? a.timestamp : (a.timestamp?.seconds * 1000 || 0);
-    const tB = b.isLocal ? b.timestamp : (b.timestamp?.seconds * 1000 || 0);
-    return tB - tA;
-  });
+      const tA = a.isLocal ? a.timestamp : (a.timestamp?.seconds * 1000 || 0);
+      const tB = b.isLocal ? b.timestamp : (b.timestamp?.seconds * 1000 || 0);
+      return tB - tA;
+    });
 
-  // Tối ưu unreadCount: Không cần "&& n.createdBy !== user.uid" vì allNotifications đã lọc sạch sẽ rồi
-  const unreadCount = allNotifications.filter(n => !(n.readBy || []).includes(user.uid)).length;
+  // Đếm số lượng thông báo chưa đọc từ danh sách đã lọc
+  const unreadCount = filteredNotifications.filter(n => !(n.readBy || []).includes(user.uid)).length;
+
+  // Hiển thị tối đa 20 thông báo gần nhất (bao gồm cả đã đọc và chưa đọc) để tránh dropdown quá dài
+  const allNotifications = filteredNotifications.slice(0, 20);
 
   const markAsReadAndNavigate = async (notif) => {
     // Đánh dấu đã đọc
