@@ -5,7 +5,7 @@ import chatIcon from '../assets/favicon.png'; // <-- 1. Import icon
 import { useI18n } from '../i18n/I18nProvider';
 import { callAIService } from '../utils/aiAdapter';
 import { db } from "../firebase";
-import { collection, onSnapshot } from "firebase/firestore";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
 
 const stripDiacritics = (s = "") => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 const normalizeRole = (r) => stripDiacritics(String(r || "").trim()).toLowerCase();
@@ -20,32 +20,57 @@ function Chatbot({ user }) {
     const [isLoading, setIsLoading] = useState(false);
     const chatBodyRef = useRef(null);
 
-    // Dynamic list of documents from Firestore
-    const [allDocs, setAllDocs] = useState([]);
+    const [sopDocs, setSopDocs] = useState([]);
+    const [msdsDocs, setMsdsDocs] = useState([]);
+    const allDocs = [...sopDocs, ...msdsDocs];
 
     useEffect(() => {
         if (!user) {
-            setAllDocs([]);
+            setSopDocs([]);
+            setMsdsDocs([]);
             return;
         }
         const userRole = normalizeRole(user.role);
-        const hasDocAccess = ["admin", "ehs", "ehs committee", "trainer", "manager"].includes(userRole);
-        
-        if (!hasDocAccess) {
-            setAllDocs([]);
-            return;
+        const canViewMSDS = ["admin", "ehs", "manager"].includes(userRole);
+        const canViewSOP = ["admin", "ehs", "ehs committee", "trainer", "manager"].includes(userRole);
+
+        let unsubSOP = null;
+        let unsubMSDS = null;
+
+        if (canViewSOP) {
+            const qSop = query(
+                collection(db, "documents"),
+                where("type", "in", ["sop", "quytrinh", "bieumau"])
+            );
+            unsubSOP = onSnapshot(qSop, (snapshot) => {
+                const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                setSopDocs(list);
+            }, (error) => {
+                console.error("Lỗi tải SOP cho chatbot:", error);
+            });
+        } else {
+            setSopDocs([]);
         }
 
-        const unsubscribe = onSnapshot(collection(db, "documents"), (snapshot) => {
-            const docsList = snapshot.docs.map((docSnap) => ({
-                id: docSnap.id,
-                ...docSnap.data()
-            }));
-            setAllDocs(docsList);
-        }, (error) => {
-            console.error("Lỗi khi tải danh sách tài liệu cho chatbot:", error);
-        });
-        return () => unsubscribe();
+        if (canViewMSDS) {
+            const qMsds = query(
+                collection(db, "documents"),
+                where("type", "==", "msds")
+            );
+            unsubMSDS = onSnapshot(qMsds, (snapshot) => {
+                const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                setMsdsDocs(list);
+            }, (error) => {
+                console.error("Lỗi tải MSDS cho chatbot:", error);
+            });
+        } else {
+            setMsdsDocs([]);
+        }
+
+        return () => {
+            if (unsubSOP) unsubSOP();
+            if (unsubMSDS) unsubMSDS();
+        };
     }, [user]);
 
     // Tự động cuộn xuống khi có tin nhắn mới

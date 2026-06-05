@@ -1,0 +1,191 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuth() {
+      return request.auth != null;
+    }
+    function existingUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    function incomingUserData() {
+      return request.resource.data;
+    }
+    function getUserRole() {
+      let r = existingUserData().role;
+      return r is list ? r : [r]; 
+    }
+    function getUserName() {
+      return existingUserData().name;
+    }
+    function getUserMealDept() {
+      return existingUserData().mealDept;
+    }
+    function isOwner(doc) {
+      return request.auth.uid == doc.userId;
+    }
+    
+    function isManagerLevel() {
+      return isAuth() && getUserRole().hasAny(['admin', 'ehs', 'manager']);
+    }
+    function isAllowedUser() {
+      return isAuth() && getUserRole().hasAny(['admin', 'ehs', 'ehs committee', 'manager']);
+    }
+    function isAdminOrEHS() {
+      return isAuth() && getUserRole().hasAny(['admin', 'ehs']);
+    }
+    function isEhsTeam() {
+      return isAuth() && getUserRole().hasAny(['admin', 'ehs', 'ehs committee']);
+    }
+
+    function allowedBaoComRoles() {
+      return [
+        'admin', 'ehs', 'Nhà Ăn', 'G_Cutting', 'G_Rolling', 'G_Finishing',
+        'G_Dipping', 'G_Buffing', 'G_Graphics', 'G_QC', 'A_QC',
+        'QC_Management', 'Kayak', 'A_Rolling', 'A_Cosmetics', 'Planning',
+        'Kho VW', 'WH_SK', 'WH_FG', 'WH_EM', 'WH_AG', 'Apple', 'MTN',
+        'Paint Blending', 'Engineering', 'MFG', 'Bảo Vệ', 'Tạp Vụ', 'Office',
+        'ehs committee'
+      ];
+    }
+
+    function canAccessBaoCom() {
+      return isAuth() && getUserRole().hasAny(allowedBaoComRoles());
+    }
+
+    function deptRoles() {
+      return [
+        'G_Cutting','G_Rolling','G_Finishing','G_Dipping','G_Buffing','G_Graphics',
+        'G_QC','A_QC','QC_Management','Kayak','A_Rolling','A_Cosmetics','Planning',
+        'Kho VW','WH_SK','WH_FG','WH_EM','WH_AG','Apple','MTN','Paint Blending',
+        'Engineering','MFG','Bảo Vệ','Tạp Vụ','Office'
+      ];
+    }
+
+    function hasDeptRole() {
+      return isAuth() && getUserRole().hasAny(deptRoles());
+    }
+
+    function isProxyForDept() {
+      return isAuth()
+        && getUserRole().hasAny(['ehs committee'])
+        && existingUserData().mealDept in deptRoles();
+    }
+
+    // ── QUẢN LÝ FILE TÀI LIỆU (MỚI THÊM) ──
+    match /documents/{docId} {
+      allow read: if isAuth() && (
+        (resource.data.type == 'msds' && getUserRole().hasAny(['admin', 'ehs', 'manager'])) ||
+        (resource.data.type in ['sop', 'quytrinh', 'bieumau'] && getUserRole().hasAny(['admin', 'ehs', 'ehs committee', 'trainer', 'manager']))
+      );
+      allow create, update, delete: if isAuth() && getUserRole().hasAny(['admin']);
+    }
+
+    match /notifications/{notifId} {
+      allow read, create, update: if isAuth();
+      allow delete: if isAuth();
+    }
+
+    match /weekly_shifts/{weekId} {
+      allow read: if isAuth();
+      allow create: if isEhsTeam() || (
+        isAuth() && request.resource.data.keys().hasOnly(getUserName())
+      );
+      allow update: if isEhsTeam() || (
+        isAuth() &&
+        request.resource.data.keys().hasAll(resource.data.keys()) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([getUserName()]) &&
+        request.resource.data.diff(resource.data).changedKeys().hasOnly([getUserName()])
+      );
+    }
+
+    match /weekly_assignments_v6/{weekId} {
+      allow read: if isAuth();
+      allow write: if isAdminOrEHS();
+    }
+
+    match /meal_reports/{date} {
+      allow read: if canAccessBaoCom();
+      allow write: if
+        isAdminOrEHS() ||
+        (isAuth() && 'Nhà Ăn' in getUserRole()) ||
+        (isAuth() && getUserRole().hasAny(deptRoles())) ||
+        (isAuth() && getUserRole().hasAny(['ehs committee'])
+          && existingUserData().mealDept in deptRoles()
+        );
+    }
+
+    match /bodam/status {
+      allow read, write: if isEhsTeam() || isManagerLevel();
+    }
+
+    match /bodam/config {
+      allow read, write: if isEhsTeam() || isManagerLevel();
+    }
+
+    match /gialaokv/{docId} {
+      allow read: if isEhsTeam() || isManagerLevel();
+      allow create: if (isEhsTeam() || isManagerLevel()) && isOwner(incomingUserData());
+      allow update, delete: if isEhsTeam() || isManagerLevel();
+    }
+
+    match /giamsatnharac/{docId} {
+      allow read: if isEhsTeam() || isManagerLevel();
+      allow create: if (isEhsTeam() || isManagerLevel()) && isOwner(incomingUserData());
+      allow update, delete: if isEhsTeam() || isManagerLevel();
+    }
+
+    match /hutthuoc_history/{logId} {
+      allow read: if isEhsTeam() || isManagerLevel();
+      allow create: if (isEhsTeam() || isManagerLevel()) && isOwner(incomingUserData());
+      allow delete, update: if isEhsTeam() || isManagerLevel();
+    }
+
+    match /tu_gemba_logs/{logId} {
+      allow read: if isAllowedUser();
+      allow create: if isAllowedUser() && isOwner(incomingUserData());
+      allow update, delete: if isAllowedUser() && (isAdminOrEHS() || isOwner(resource.data));
+    }
+
+    match /gemba_scores/{department} {
+      allow read, write: if isAllowedUser();
+    }
+
+    match /gemba_events/{document=**} {
+      allow read, write: if isAllowedUser();
+    }
+
+    match /audit_comments/{commentId} {
+      allow read, write: if isAllowedUser();
+    }
+
+    match /notification_state/{docId} {
+      allow read, write: if isAuth();
+    }
+
+    match /users/{userId} {
+      allow get: if isAuth() && (request.auth.uid == userId || isAdminOrEHS());
+      allow list: if isAllowedUser();
+      allow update: if isAuth() && request.auth.uid == userId &&
+        incomingUserData().role == existingUserData().role;
+      allow create, delete: if isAdminOrEHS();
+    }
+
+    match /user_prefs/{userId} {
+      allow read, write: if isAuth() && request.auth.uid == userId;
+    }
+
+    match /role_requests/{requestId} {
+      allow read: if isAdminOrEHS();
+      allow create: if isAuth();
+      allow update, delete: if isAdminOrEHS();
+    }
+
+    match /settings/{docId} {
+      allow read: if isAuth() && getUserRole().hasAny(['admin']);
+      allow write: if isAuth() && getUserRole().hasAny(['admin']);
+    }
+
+  }
+}
