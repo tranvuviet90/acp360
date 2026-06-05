@@ -1038,6 +1038,8 @@ function DailyAudit({ user, isMobile, newErrorCounts, setGembaNotifCounts }) {
   const [viewer, setViewer] = useState({ open: false, list: [], index: 0 });
   const [otherErrorSeverity, setOtherErrorSeverity] = useState("Nhẹ");
   const [note, setNote] = useState("");
+  const [location, setLocation] = useState("");
+  const [responsiblePerson, setResponsiblePerson] = useState("");
   const fileRef = useRef();
   const [thumbMap, setThumbMap] = useState({});
   const [improvementModal, setImprovementModal] = useState({ isOpen: false, error: null, index: -1 });
@@ -1241,11 +1243,11 @@ function DailyAudit({ user, isMobile, newErrorCounts, setGembaNotifCounts }) {
     if (isCustomError) {
       const points = { Nhẹ: 2, Nặng: 4, "Nghiêm trọng": 6 };
       // desc luôn là "Lỗi khác", nội dung chi tiết người đăng nằm trong note
-      newErrorObject = { group: selectedGroup, code: `custom-${Date.now()}`, desc: "Lỗi khác", point: points[otherErrorSeverity], timestamp: Timestamp.now(), imageUrls: urls, note: noteToUse, addedBy: user.name, isReminder };
+      newErrorObject = { group: selectedGroup, code: `custom-${Date.now()}`, desc: "Lỗi khác", point: points[otherErrorSeverity], timestamp: Timestamp.now(), imageUrls: urls, note: noteToUse, addedBy: user.name, isReminder, location, responsiblePerson };
     } else {
       const errors = (errorGroups.find((g) => g.group === selectedGroup) || { items: [] }).items;
       const err = errors.find((e) => e.code === selectedError);
-      newErrorObject = { group: selectedGroup, ...err, timestamp: Timestamp.now(), imageUrls: urls, note: noteToUse, addedBy: user.name, isReminder };
+      newErrorObject = { group: selectedGroup, ...err, timestamp: Timestamp.now(), imageUrls: urls, note: noteToUse, addedBy: user.name, isReminder, location, responsiblePerson };
     }
     const docRef = doc(db, "gemba_scores", dep.name);
     const docSnap = await getDoc(docRef);
@@ -1259,7 +1261,7 @@ function DailyAudit({ user, isMobile, newErrorCounts, setGembaNotifCounts }) {
     try {
       await addDoc(collection(db, "notifications"), {
         type: "new_gemba_error",
-        message: `${user.name} đã thêm lỗi mới tại ${dep.name}: ${newErrorObject.desc}`,
+        message: `${user.name} đã thêm lỗi mới tại ${dep.name} (Vị trí: ${location || "Chưa xác định"}) - Người nhận: ${responsiblePerson || "Chưa xác định"} - ${newErrorObject.desc}`,
         targetRoles: ["ehs", "admin", "ehs committee"],
         createdBy: user.uid,
         readBy: [],
@@ -1275,6 +1277,7 @@ function DailyAudit({ user, isMobile, newErrorCounts, setGembaNotifCounts }) {
     setImageFileNames([]);
     if (fileRef.current) fileRef.current.value = "";
     setOtherErrorSeverity("Nhẹ"); setNote(""); setIsUploading(false); setIsReminder(false);
+    setLocation(""); setResponsiblePerson("");
   }
 
   async function handleDelete(idx) {
@@ -1545,6 +1548,28 @@ function DailyAudit({ user, isMobile, newErrorCounts, setGembaNotifCounts }) {
                     </div>
                 </div>
             )}
+            <div style={{ display: 'flex', gap: 15, marginBottom: 15, flexWrap: 'wrap' }}>
+              <div style={{ flex: '1 1 200px' }}>
+                <div style={{ fontSize: 15, color: colors.textPrimary, marginBottom: 5 }}>{t("gemba.location")}</div>
+                <input
+                  type="text"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  placeholder={t("gemba.location.placeholder")}
+                  style={{ width: "100%", boxSizing: "border-box", padding: "8px 12px", borderRadius: 8, border: `1.5px solid ${colors.primaryLight}`, fontSize: 15 }}
+                />
+              </div>
+              <div style={{ flex: '1 1 200px' }}>
+                <div style={{ fontSize: 15, color: colors.textPrimary, marginBottom: 5 }}>{t("gemba.recipient")}</div>
+                <input
+                  type="text"
+                  value={responsiblePerson}
+                  onChange={(e) => setResponsiblePerson(e.target.value)}
+                  placeholder={t("gemba.recipient.placeholder")}
+                  style={{ width: "100%", boxSizing: "border-box", padding: "8px 12px", borderRadius: 8, border: `1.5px solid ${colors.primaryLight}`, fontSize: 15 }}
+                />
+              </div>
+            </div>
             <div style={{ marginBottom: 8 }}>
                 <div style={{ fontSize: 15, color: colors.textPrimary, marginBottom: 5 }}>{t("gemba.note.label")}</div>
                 <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder={isCustomError ? t("gemba.note.custom.placeholder") : t("gemba.note.placeholder")} style={{ width: "100%", minHeight: 60, boxSizing: "border-box", padding: "8px 12px", borderRadius: 8, border: `1.5px solid ${colors.primaryLight}`, fontSize: 15, fontFamily: "sans-serif" }} />
