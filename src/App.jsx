@@ -46,6 +46,69 @@ const normalizeRole = (r) => stripDiacritics(String(r || "").trim()).toLowerCase
 const deptRolesNormalized = new Set(departmentRoles.map(normalizeRole));
 const CANTEEN_NORMALIZED = normalizeRole("Nhà Ăn");
 
+const getWeekNumber = (d) => {
+  d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+};
+
+const getWeekDates = (baseDate) => {
+  const d = new Date(baseDate);
+  const dayOfWeek = d.getDay();
+  const diff = d.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+  const firstDayOfWeek = new Date(d);
+  firstDayOfWeek.setDate(diff);
+
+  const weekDays = [];
+  for (let i = 0; i < 7; i++) {
+    const day = new Date(firstDayOfWeek);
+    day.setDate(day.getDate() + i);
+    weekDays.push(day);
+  }
+  return weekDays;
+};
+
+const formatDateToId = (date) => {
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  const monthStr = month < 10 ? '0' + month : month;
+  const dayStr = day < 10 ? '0' + day : day;
+  return `${year}-${monthStr}-${dayStr}`;
+};
+
+function getAssignedShifts(assignedTo) {
+  const shifts = { S1: null, S2: null, S3: null, HC: null, S8: null };
+  if (!assignedTo) return shifts;
+  
+  if (Array.isArray(assignedTo)) {
+    const keys = ["HC", "S1", "S2", "S3", "S8"];
+    assignedTo.forEach((u, i) => {
+      if (i < keys.length && u) {
+        shifts[keys[i]] = { uid: u.uid, name: u.name };
+      }
+    });
+    return shifts;
+  }
+  
+  const hasShiftKeys = ["S1", "S2", "S3", "HC", "S8"].some(k => k in assignedTo);
+  if (hasShiftKeys) {
+    return {
+      S1: assignedTo.S1 || null,
+      S2: assignedTo.S2 || null,
+      S3: assignedTo.S3 || null,
+      HC: assignedTo.HC || null,
+      S8: assignedTo.S8 || null,
+    };
+  }
+  
+  if (assignedTo.uid && assignedTo.name) {
+    shifts.HC = { uid: assignedTo.uid, name: assignedTo.name };
+  }
+  return shifts;
+}
+
 function useWindowSize() {
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   useEffect(() => {
@@ -182,6 +245,95 @@ export default function App() {
     const id = setInterval(fetchAll, 5 * 60 * 1000);
     return () => clearInterval(id);
   }, [user, isRestrictedRole]); // Cập nhật dependency
+
+  // Automatic shift start and walkie-talkie reminders
+  useEffect(() => {
+    if (!user || normalizeRole(user.role) !== "ehs committee") return;
+
+    const checkReminders = async () => {
+      try {
+        const today = new Date();
+        const todayDateId = formatDateToId(today);
+        const weekDates = getWeekDates(today);
+        const weekId = `${weekDates[0].getFullYear()}-${getWeekNumber(weekDates[0])}`;
+
+        // 1. Fetch weekly shift assignments
+        const shiftDocRef = doc(db, "weekly_shifts", weekId);
+        const shiftSnap = await getDoc(shiftDocRef);
+        if (!shiftSnap.exists()) return;
+
+        const shiftData = shiftSnap.data();
+        const myShifts = shiftData[user.name];
+        const todayShift = myShifts ? myShifts[todayDateId] : null;
+
+        if (!todayShift || todayShift === "Off") return;
+
+        const SHIFT_START_HOURS = { S1: 6, S2: 14, S3: 22, HC: 8, S8: 8 };
+        const startHour = SHIFT_START_HOURS[todayShift];
+        if (startHour === undefined) return;
+
+        const currentHour = today.getHours();
+        const currentMinute = today.getMinutes();
+        const nowMinutes = currentHour * 60 + currentMinute;
+        const shiftStartMinutes = startHour * 60;
+
+        // A. Shift Start Reminder: within 1 hour after shift start
+        if (nowMinutes >= shiftStartMinutes && nowMinutes < shiftStartMinutes + 60) {
+          const notifId = `shift-remind-${todayDateId}-${user.uid}-${todayShift}`;
+          await setDoc(doc(db, "notifications", notifId), {
+            type: "shift_start_remind",
+            message: `Ca trực ${todayShift} của bạn đã bắt đầu. Hãy nhớ thực hiện các nhiệm vụ EHS nhé!`,
+            targetUserId: user.uid,
+            createdBy: "system",
+            readBy: [],
+            relatedId: notifId,
+            timestamp: Timestamp.now()
+          });
+        }
+
+        // B. Walkie-Talkie Reminder: within 15 mins to 1h15m after shift start
+        if (nowMinutes >= shiftStartMinutes + 15 && nowMinutes < shiftStartMinutes + 75) {
+          const bodamDocRef = doc(db, "bodam", "status");
+          const bodamSnap = await getDoc(bodamDocRef);
+          if (bodamSnap.exists() && bodamSnap.data().status) {
+            const statusList = bodamSnap.data().status;
+            let assignedBodamIdx = -1;
+            let isCheckedIn = false;
+
+            statusList.forEach((cur, idx) => {
+              const assigned = getAssignedShifts(cur.assignedTo);
+              if (assigned[todayShift]?.uid === user.uid) {
+                assignedBodamIdx = idx;
+                if (cur.checked && cur.name === user.name) {
+                  isCheckedIn = true;
+                }
+              }
+            });
+
+            if (assignedBodamIdx !== -1 && !isCheckedIn) {
+              const notifId = `bodam-remind-${todayDateId}-${user.uid}-${todayShift}`;
+              await setDoc(doc(db, "notifications", notifId), {
+                type: "bodam_unreturned_remind",
+                message: `Bạn đã bắt đầu ca trực ${todayShift} nhưng chưa nhận/check-in Bộ đàm ${assignedBodamIdx + 1}. Hãy check-in ngay nhé!`,
+                targetUserId: user.uid,
+                createdBy: "system",
+                readBy: [],
+                relatedId: notifId,
+                timestamp: Timestamp.now()
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Lỗi kiểm tra nhắc nhở ca trực/bộ đàm:", err);
+      }
+    };
+
+    // Run check immediately on mount, and then every 2 minutes
+    checkReminders();
+    const intervalId = setInterval(checkReminders, 2 * 60 * 1000);
+    return () => clearInterval(intervalId);
+  }, [user]);
 
   const handleLogout = async () => {
     try {

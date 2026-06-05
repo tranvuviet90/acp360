@@ -215,7 +215,7 @@ export const DICTS = {
 
     // MagicMenu
     "menu.gemba": "Daily Audit",
-    "menu.tugemba": "Gemba",
+    "menu.tugemba": "Gemba bổ sung",
     "menu.walkietalkie": "Bộ đàm",
     "menu.shift": "Phân ca",
     "menu.smoking": "Giám Sát Hút Thuốc",
@@ -505,7 +505,7 @@ export const DICTS = {
 
     // MagicMenu
     "menu.gemba": "Daily Audit",
-    "menu.tugemba": "Gemba",
+    "menu.tugemba": "Additional Gemba",
     "menu.walkietalkie": "Walkie-talkie",
     "menu.shift": "Shifts",
     "menu.smoking": "Smoking Monitor",

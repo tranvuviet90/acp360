@@ -324,6 +324,7 @@ export default function LightboxSwipeOnly({
   const [offsetX, setOffsetX] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [activePanel, setActivePanel] = useState("center"); // 'prev' | 'center' | 'next'
+  const [localIndex, setLocalIndex] = useState(index);
   
   const isDragging = useRef(false);
   const startX = useRef(0);
@@ -335,9 +336,16 @@ export default function LightboxSwipeOnly({
 
   const total = list.length;
 
+  // Sync index from parent when it opens or changes from outside
+  useEffect(() => {
+    if (open) {
+      setLocalIndex(index);
+    }
+  }, [open, index]);
+
   // Tính toán chỉ số ảnh cho 3 panel
-  const prevIdx = useMemo(() => (index - 1 + total) % total, [index, total]);
-  const nextIdx = useMemo(() => (index + 1) % total, [index, total]);
+  const prevIdx = useMemo(() => (localIndex - 1 + total) % total, [localIndex, total]);
+  const nextIdx = useMemo(() => (localIndex + 1) % total, [localIndex, total]);
 
   // Ngăn cuộn trang web khi đang mở Lightbox
   useEffect(() => {
@@ -362,7 +370,7 @@ export default function LightboxSwipeOnly({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, total, index]);
+  }, [open, total, localIndex]);
 
   // Tải trước (preload) các ảnh xung quanh
   useEffect(() => {
@@ -373,7 +381,7 @@ export default function LightboxSwipeOnly({
     rightImg.src = list[nextIdx] || "";
     leftImg.decode?.().catch(() => {});
     rightImg.decode?.().catch(() => {});
-  }, [open, index, list, prevIdx, nextIdx, total]);
+  }, [open, localIndex, list, prevIdx, nextIdx, total]);
 
   // Xử lý chuyển tiếp mượt mà qua ảnh trước
   const handlePrevTransition = () => {
@@ -394,12 +402,15 @@ export default function LightboxSwipeOnly({
   // Hoàn tất animation chuyển slide
   const handleTransitionEnd = () => {
     if (!isTransitioning) return;
+    let nextIdxVal = localIndex;
     if (activePanel === "next") {
+      nextIdxVal = (localIndex + 1) % total;
       onNext?.();
     } else if (activePanel === "prev") {
+      nextIdxVal = (localIndex - 1 + total) % total;
       onPrev?.();
     }
-    // Trả track về vị trí trung tâm ngay lập tức không có transition
+    setLocalIndex(nextIdxVal);
     setIsTransitioning(false);
     setActivePanel("center");
     setOffsetX(0);
@@ -468,19 +479,40 @@ export default function LightboxSwipeOnly({
     }
   };
 
+  // Tải hình ảnh
+  const handleDownload = async () => {
+    const imageUrl = list[localIndex];
+    if (!imageUrl) return;
+    try {
+      const response = await fetch(imageUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const filename = imageUrl.split('/').pop().split('?')[0] || 'ehs_image.jpg';
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      window.open(imageUrl, '_blank');
+    }
+  };
+
   if (!open) return null;
 
-  // Tính toán translate của track dựa trên panel và khoảng cách drag
-  let translateValue = "calc(-100vw)";
+  // Tính toán translate của track dựa trên panel và khoảng cách drag bằng px nguyên bản để tăng hiệu suất mobile (không dùng calc)
+  let tx = -window.innerWidth;
   if (isDragging.current) {
-    translateValue = `calc(-100vw + ${offsetX}px)`;
+    tx = -window.innerWidth + offsetX;
   } else if (isTransitioning) {
     if (activePanel === "next") {
-      translateValue = "calc(-200vw)";
+      tx = -2 * window.innerWidth;
     } else if (activePanel === "prev") {
-      translateValue = "0vw";
+      tx = 0;
     } else {
-      translateValue = "calc(-100vw)";
+      tx = -window.innerWidth;
     }
   }
 
@@ -489,7 +521,7 @@ export default function LightboxSwipeOnly({
     flexDirection: "row",
     width: "300vw",
     height: "100%",
-    transform: `translate3d(${translateValue}, 0, 0)`,
+    transform: `translate3d(${tx}px, 0, 0)`,
     transition: isTransitioning ? "transform 0.3s cubic-bezier(0.215, 0.61, 0.355, 1)" : "none",
     willChange: "transform",
   };
@@ -580,7 +612,7 @@ export default function LightboxSwipeOnly({
             WebkitBackdropFilter: "blur(4px)",
           }}
         >
-          {index + 1} / {total}
+          {localIndex + 1} / {total}
         </div>
       )}
 
@@ -592,6 +624,23 @@ export default function LightboxSwipeOnly({
       >
         ✕
       </button>
+
+      {/* Download Button */}
+      {total > 0 && (
+        <button
+          onClick={handleDownload}
+          className="lightbox-btn"
+          style={{
+            position: "absolute",
+            top: 20,
+            right: 80,
+            zIndex: 11002,
+          }}
+          title="Tải ảnh nhanh"
+        >
+          📥
+        </button>
+      )}
 
       {/* Desktop Arrow Buttons */}
       {total > 1 && !isTransitioning && (
@@ -680,9 +729,9 @@ export default function LightboxSwipeOnly({
             }}
             onClick={onClose}
           >
-            {list[index] && (
+            {list[localIndex] && (
               <img
-                src={list[index]}
+                src={list[localIndex]}
                 alt=""
                 draggable={false}
                 onClick={(e) => e.stopPropagation()}

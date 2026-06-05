@@ -341,7 +341,7 @@ function ExportModal({ onClose, departments }) {
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000 }}>
       <div style={{ background: colors.surface, padding: 22, borderRadius: 12, width: 520, boxShadow: "0 4px 15px rgba(0,0,0,.2)" }}>
-        <h3 style={{ marginTop: 0, color: colors.primary }}>Xuất báo cáo CAP (Tự Gemba)</h3>
+        <h3 style={{ marginTop: 0, color: colors.primary }}>Xuất báo cáo CAP (Gemba bổ sung)</h3>
         <div style={{ display: 'grid', gap: '15px' }}>
           <div>
             <label style={{ fontWeight: 700, color: colors.textPrimary, display: 'block', marginBottom: 5 }}>Chọn khoảng ngày</label>
@@ -699,7 +699,7 @@ function Gemba({ user, isMobile, newLogCounts, setTuGembaNotifCounts }) {
     try {
       await addDoc(collection(db, "notifications"), {
         type: "new_tu_gemba_error",
-        message: `${user.name} đã thêm lỗi mới tại ${dep.name} (Tự Gemba): ${logData.desc}`,
+        message: `${user.name} đã thêm lỗi mới tại ${dep.name} (Gemba bổ sung): ${logData.desc}`,
         targetRoles: ["ehs", "admin", "ehs committee"],
         createdBy: user.uid,
         readBy: [],
@@ -873,7 +873,7 @@ function Gemba({ user, isMobile, newLogCounts, setTuGembaNotifCounts }) {
           <div style={{ flex: "1 1 auto", minWidth: 270, order: isMobile ? 2 : 1 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap" }}>
               <div style={{ fontWeight: 700, fontSize: isMobile ? 16 : 18, color: colors.primary }}>
-                Tự Gemba: {departments[depIndex].name}
+                Gemba bổ sung: {departments[depIndex].name}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} style={{ padding: 8, borderRadius: 6, border: `1px solid ${colors.border}` }} />

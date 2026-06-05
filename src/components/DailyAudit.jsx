@@ -42,19 +42,18 @@ function calcHeSo(people) {
 }
 
 const errorGroups = [
-  { group: "Bảo hộ lao động (PPE)", items: [ { code: "1.1", desc: "Không sử dụng hoặc sử dụng không đúng loại BHLĐ", point: 4 }, { code: "1.2", desc: "Sử dụng BHLĐ không đúng quy cách/ sai mục đích", point: 4 }, { code: "1.3", desc: "Không bảo quản BHLĐ/ Để không đúng vị trí", point: 2 }, { code: "1.4", desc: "BHLĐ không được vệ sinh định kỳ/ dơ bẩn", point: 2 }, { code: "1.5", desc: "BHLĐ không được thay mới khi đến kỳ/ không có thời gian theo dõi", point: 4 }, ] },
-  { group: "5S", items: [ { code: "2.1", desc: "Không sàng lọc, loại bỏ các vật dụng không cần thiết", point: 2 }, { code: "2.2", desc: "Không phân loại, sắp xếp, tổ chức các vật dụng, dụng cụ theo trật tự", point: 4 }, { code: "2.3", desc: "Không layout các vị trí quy định như tủ điện, bình chữa cháy, khu vực để dụng cụ làm việc,…", point: 2 }, { code: "2.4", desc: "Layout bị bong tróc", point: 2 }, { code: "2.5", desc: "Không định kỳ vệ sinh khu vực làm việc/ không có lịch vệ sinh", point: 4 }, { code: "2.6", desc: "Vệ Sinh", point: 2 }, { code: "2.7", desc: "Không kiểm tra Checklist 5S", point: 2 }, { code: "2.8", desc: "Dụng cụ vệ sinh để không đúng nơi quy định", point: 2 }, { code: "2.9", desc: "Bộ phận phát sinh bụi bẩn, rác", point: 2 }, ] },
-  { group: "Hệ thống điện", items: [ { code: "3.1", desc: "Nguồn điện bị rò rỉ", point: 6 }, { code: "3.2", desc: "Ổ cắm điện bị chảy nhựa", point: 6 }, { code: "3.3", desc: "Tủ điện không được khóa", point: 4 }, { code: "3.4", desc: "Để dụng cụ, hàng hóa che chắn tủ điện", point: 4 }, { code: "3.5", desc: "Đèn báo nguồn của tủ điện không hoạt động", point: 2 }, { code: "3.6", desc: "Máy móc, thiết bị điện không được nối đất", point: 4 }, { code: "3.7", desc: "Dây nối đất không đúng quy cách", point: 2 }, { code: "3.8", desc: "Không có nút che chắn các ổ cắm trống", point: 2 }, { code: "3.9", desc: "Dây điện bị bong tróc", point: 6 }, { code: "3.10", desc: "Dây điện không gọn gàng", point: 4 }, { code: "3.11", desc: "Các vật liệu dễ cháy để gần tủ điện", point: 4 }, { code: "3.12", desc: "Không tắt điện máy móc, thiết bị khi không sử dụng", point: 2 }, { code: "3.13", desc: "Vị trí đấu nối dây không có ống bảo vệ", point: 4 }, { code: "3.14", desc: "Để dụng cụ, vật dụng đè lên dây dẫn điện", point: 4 }, { code: "3.15", desc: "Ổ cắm điện bị đóng bụi không được vệ sinh", point: 4 }, { code: "3.16", desc: "Không tắt đèn khu vực làm việc khi giải lao", point: 4 }, ] },
-  { group: "Dụng cụ", items: [ { code: "4.1", desc: "Dụng cụ làm việc sử dụng không đúng mục đích", point: 4 }, { code: "4.2", desc: "Dụng cụ làm việc để không đúng nơi quy định", point: 4 }, { code: "4.3", desc: "Dụng cụ làm việc có nguy cơ gây mất an toàn", point: 4 }, ] },
-  { group: "Hóa chất", items: [ { code: "5.1", desc: "Hóa chất không có tem nhãn", point: 4 }, { code: "5.2", desc: "Tem nhãn hóa chất phai mờ, không đọc được thông tin", point: 4 }, { code: "5.3", desc: "Hóa chất không để trong khay chống tràn", point: 4 }, { code: "5.4", desc: "Hóa chất sử dụng xong không đậy nắp", point: 4 }, { code: "5.5", desc: "Hóa chất để chung với các vật liệu, thiết bị dễ cháy nổ", point: 6 }, { code: "5.6", desc: "Hóa chất chất cao có nguy cơ ngã đổ", point: 4 }, { code: "5.7", desc: "Hóa chất lưu trữ không đúng nơi quy định", point: 4 }, { code: "5.8", desc: "Khi di chuyển hóa chất không sử dụng xe đẩy chống tràn", point: 4 }, { code: "5.9", desc: "Tủ lưu trữ hóa chất rách, bong tróc, không có danh sách lưu trữ", point: 2 }, { code: "5.10", desc: "Kệ/ phuy sang chiết hóa chất/ thùng khuấy sơn không có dây nối đất", point: 4 }, { code: "5.11", desc: "Để rò rỉ hóa chất ra ngoài không vệ sinh, môi trường", point: 4 }, { code: "5.12", desc: "Lưu trữ các thùng carton, vật liệu dễ cháy nổ trong kho hóa chất", point: 4 }, { code: "5.13", desc: "Sử dụng hóa chất cấm khi chưa được EHS kiểm tra", point: 4 }, { code: "5.14", desc: "Hóa chất không có MSDS", point: 6 }, { code: "5.15", desc: "Để nhiễu, chảy tràn hóa chất ra sàn, môi trường", point: 4 }, { code: "5.16", desc: "Hóa chất không được lưu trữ trong các dụng cụ chuyên dụng", point: 4 }, ] },
-  { group: "Biển cảnh báo", items: [ { code: "6.1", desc: "Khu vực nguy hiểm không có cảnh báo", point: 4 }, { code: "6.2", desc: "Sử dụng không đúng cảnh báo", point: 2 }, { code: "6.3", desc: "Bảng/băng/dây cảnh báo bị mờ, bong tróc", point: 2 }, { code: "6.4", desc: "Cảnh báo dơ bẩn không được vệ sinh", point: 4 }, { code: "6.5", desc: "Để đồ che chắn cảnh báo", point: 4 }, { code: "6.6", desc: "Vị trí sửa chữa nguy hiểm không có cảnh báo", point: 6 }, { code: "6.7", desc: "Không LOTO trước khi sửa chữa", point: 4 }, { code: "6.8", desc: "Không thông báo làm việc tia lửa, trên cao…", point: 6 }, { code: "6.9", desc: "Không treo cảnh báo khi sạc xe nâng", point: 4 }, { code: "6.10", desc: "Nguồn điện cao không có cảnh báo", point: 4 }, { code: "6.11", desc: "Không treo cảnh báo khi dùng thang/ sai thời gian", point: 4 }, { code: "6.12", desc: "Không khóa cửa thang khi không dùng", point: 4 }, { code: "6.13", desc: "Vị trí có hố sâu không có rào/cảnh báo", point: 4 }, ] },
-  { group: "Phân loại rác", items: [ { code: "7.1", desc: "Không tiến hành phân loại rác", point: 6 }, { code: "7.2", desc: "Phân loại rác không đúng quy định", point: 4 }, ] },
-  { group: "Phòng cháy chữa cháy", items: [ { code: "8.1", desc: "Không trang bị bình chữa cháy", point: 6 }, { code: "8.2", desc: "Che chắn lối thoát hiểm", point: 6 }, { code: "8.3", desc: "Che chắn bình/tủ chữa cháy", point: 6 }, { code: "8.4", desc: "Che chắn nút kéo chuông báo cháy", point: 4 }, { code: "8.5", desc: "Dụng cụ chữa cháy dùng sai mục đích", point: 4 }, { code: "8.6", desc: "Vật liệu dễ cháy gần nguồn nhiệt", point: 4 }, { code: "8.7", desc: "Không kiểm tra PCCC định kỳ tháng", point: 4 }, { code: "8.8", desc: "Tự ý di dời/để bình sai nơi quy định", point: 4 }, ] },
-  { group: "Máy móc", items: [ { code: "9.1", desc: "Máy không có SOP", point: 6 }, { code: "9.2", desc: "SOP không cập nhật mới", point: 4 }, { code: "9.3", desc: "Che chắn thông tin SOP", point: 4 }, { code: "9.4", desc: "Tem nhãn hướng dẫn rách/bong", point: 4 }, { code: "9.5", desc: "Nút điều khiển không có tiếng Việt", point: 4 }, { code: "9.6", desc: "Thiết bị chuyển động không có hộp bảo vệ", point: 6 }, { code: "9.7", desc: "Không tắt máy khi không sử dụng", point: 4 }, { code: "9.9", desc: "Không tắt điện/nước khi không làm việc", point: 4 }, { code: "9.10", desc: "Che chắn Sensor an toàn", point: 6 }, { code: "9.11", desc: "Không có DS nhân viên vận hành lò", point: 4 }, { code: "9.12", desc: "Thiết bị hư không báo sửa chữa", point: 4 }, { code: "9.14", desc: "Không kiểm tra quạt", point: 2 }, { code: "9.15", desc: "Không kiểm tra trước khi vận hành", point: 4 }, { code: "9.16", desc: "Không có thẻ CNVH khi dùng vật sắc", point: 4 }, { code: "9.17", desc: "Chưa đào tạo chứng nhận vận hành", point: 6 }, ] },
-  { group: "Nguyên vật liệu", items: [ { code: "10.1", desc: "Chất cao >1m5 không quấn PE", point: 4 }, { code: "10.2", desc: "Nguyên liệu không để trên pallet", point: 2 }, { code: "10.3", desc: "Khiêng vật liệu nặng 1 người", point: 4 }, { code: "10.4", desc: "Thùng móp bể không thay/ chất lẫn kích thước", point: 4 }, { code: "10.5", desc: "Không có dây đai chống ngã nguyên liệu", point: 4 }, { code: "10.6", desc: "Chất hàng không đúng quy định/không gọn", point: 2 }, { code: "10.7", desc: "Di chuyển VL không dùng dây đai cố định", point: 4 }, { code: "10.8", desc: "Không cố định cuộn nguyên liệu", point: 4 }, ] },
-  { group: "Hành vi không an toàn", items: [ { code: "11.1", desc: "Cố ý làm hư máy móc thiết bị", point: 6 }, { code: "11.2", desc: "Cố ý làm hư phương tiện PCCC", point: 6 }, { code: "11.3", desc: "Leo cao không dùng dây đai", point: 6 }, { code: "11.4", desc: "Dụng cụ tự chế nguy hiểm", point: 4 }, { code: "11.5", desc: "Mang bật lửa/thuốc lá nơi dễ cháy", point: 6 }, { code: "11.6", desc: "Hút thuốc khu vực cấm", point: 6 }, { code: "11.7", desc: "Cố ý làm mất chức năng an toàn", point: 6 }, { code: "11.8", desc: "Tự ý đổi thao tác/quy trình/kết cấu", point: 6 }, { code: "11.9", desc: "Đưa tay vào thiết bị chuyển động", point: 6 }, { code: "11.10", desc: "Dùng ĐT cá nhân/đeo tai phone khi làm", point: 4 }, { code: "11.11", desc: "Không cuộn gọn tóc vào nón khi vận hành", point: 4 }, { code: "11.12", desc: "Phát hiện hư không báo sửa", point: 4 }, { code: "11.13", desc: "Tự ý tháo cover/che chắn sensor", point: 6 }, { code: "11.14", desc: "Không hướng dẫn NV mới theo AT", point: 6 }, { code: "11.15", desc: "Không hướng dẫn giám sát AT nhà thầu", point: 6 }, { code: "11.16", desc: "Lưu trữ vật nguy hiểm ở tủ cá nhân", point: 6 }, { code: "11.17", desc: "Vứt rác/khạc nhổ bừa bãi", point: 4 }, ] },
-  { group: "Thái độ hợp tác", items: [ { code: "12.1", desc: "Không hợp tác xử lý an toàn", point: 6 }, { code: "12.2", desc: "Thái độ đe dọa", point: 6 }, { code: "12.3", desc: "Đánh người", point: 6 }, { code: "12.4", desc: "QL không xử lý vi phạm của nhân viên", point: 6 }, ] },
-  // Lỗi Khác: dành cho các lỗi không thuộc nhóm nào, desc cố định là "Lỗi khác", chi tiết ghi trong note
+  { group: "Bảo hộ lao động (PPE)", items: [ { code: "1.1", desc: "Không sử dụng hoặc sử dụng không đúng loại BHLĐ", point: 4 }, { code: "1.2", desc: "Sử dụng BHLĐ không đúng quy cách/ sai mục đích", point: 4 }, { code: "1.3", desc: "Không bảo quản BHLĐ/ Để không đúng vị trí", point: 2 }, { code: "1.4", desc: "BHLĐ không được vệ sinh định kỳ/ dơ bẩn", point: 2 }, { code: "1.5", desc: "BHLĐ không được thay mới khi đến kỳ/ không có thời gian theo dõi", point: 4 }, { code: "1.other", desc: "Lỗi khác (PPE)", point: 0 } ] },
+  { group: "5S", items: [ { code: "2.1", desc: "Không sàng lọc, loại bỏ các vật dụng không cần thiết", point: 2 }, { code: "2.2", desc: "Không phân loại, sắp xếp, tổ chức các vật dụng, dụng cụ theo trật tự", point: 4 }, { code: "2.3", desc: "Không layout các vị trí quy định như tủ điện, bình chữa cháy, khu vực để dụng cụ làm việc,…", point: 2 }, { code: "2.4", desc: "Layout bị bong tróc", point: 2 }, { code: "2.5", desc: "Không định kỳ vệ sinh khu vực làm việc/ không có lịch vệ sinh", point: 4 }, { code: "2.6", desc: "Vệ Sinh", point: 2 }, { code: "2.7", desc: "Không kiểm tra Checklist 5S", point: 2 }, { code: "2.8", desc: "Dụng cụ vệ sinh để không đúng nơi quy định", point: 2 }, { code: "2.9", desc: "Bộ phận phát sinh bụi bẩn, rác", point: 2 }, { code: "2.other", desc: "Lỗi khác (5S)", point: 0 } ] },
+  { group: "Hệ thống điện", items: [ { code: "3.1", desc: "Nguồn điện bị rò rỉ", point: 6 }, { code: "3.2", desc: "Ổ cắm điện bị chảy nhựa", point: 6 }, { code: "3.3", desc: "Tủ điện không được khóa", point: 4 }, { code: "3.4", desc: "Để dụng cụ, hàng hóa che chắn tủ điện", point: 4 }, { code: "3.5", desc: "Đèn báo nguồn của tủ điện không hoạt động", point: 2 }, { code: "3.6", desc: "Máy móc, thiết bị điện không được nối đất", point: 4 }, { code: "3.7", desc: "Dây nối đất không đúng quy cách", point: 2 }, { code: "3.8", desc: "Không có nút che chắn các ổ cắm trống", point: 2 }, { code: "3.9", desc: "Dây điện bị bong tróc", point: 6 }, { code: "3.10", desc: "Dây điện không gọn gàng", point: 4 }, { code: "3.11", desc: "Các vật liệu dễ cháy để gần tủ điện", point: 4 }, { code: "3.12", desc: "Không tắt điện máy móc, thiết bị khi không sử dụng", point: 2 }, { code: "3.13", desc: "Vị trí đấu nối dây không có ống bảo vệ", point: 4 }, { code: "3.14", desc: "Để dụng cụ, vật dụng đè lên dây dẫn điện", point: 4 }, { code: "3.15", desc: "Ổ cắm điện bị đóng bụi không được vệ sinh", point: 4 }, { code: "3.16", desc: "Không tắt đèn khu vực làm việc khi giải lao", point: 4 }, { code: "3.other", desc: "Lỗi khác (Điện)", point: 0 } ] },
+  { group: "Dụng cụ", items: [ { code: "4.1", desc: "Dụng cụ làm việc sử dụng không đúng mục đích", point: 4 }, { code: "4.2", desc: "Dụng cụ làm việc để không đúng nơi quy định", point: 4 }, { code: "4.3", desc: "Dụng cụ làm việc có nguy cơ gây mất an toàn", point: 4 }, { code: "4.other", desc: "Lỗi khác (Dụng cụ)", point: 0 } ] },
+  { group: "Hóa chất", items: [ { code: "5.1", desc: "Hóa chất không có tem nhãn", point: 4 }, { code: "5.2", desc: "Tem nhãn hóa chất phai mờ, không đọc được thông tin", point: 4 }, { code: "5.3", desc: "Hóa chất không để trong khay chống tràn", point: 4 }, { code: "5.4", desc: "Hóa chất sử dụng xong không đậy nắp", point: 4 }, { code: "5.5", desc: "Hóa chất để chung với các vật liệu, thiết bị dễ cháy nổ", point: 6 }, { code: "5.6", desc: "Hóa chất chất cao có nguy cơ ngã đổ", point: 4 }, { code: "5.7", desc: "Hóa chất lưu trữ không đúng nơi quy định", point: 4 }, { code: "5.8", desc: "Khi di chuyển hóa chất không sử dụng xe đẩy chống tràn", point: 4 }, { code: "5.9", desc: "Tủ lưu trữ hóa chất rách, bong tróc, không có danh sách lưu trữ", point: 2 }, { code: "5.10", desc: "Kệ/ phuy sang chiết hóa chất/ thùng khuấy sơn không có dây nối đất", point: 4 }, { code: "5.11", desc: "Để rò rỉ hóa chất ra ngoài không vệ sinh, môi trường", point: 4 }, { code: "5.12", desc: "Lưu trữ các thùng carton, vật liệu dễ cháy nổ trong kho hóa chất", point: 4 }, { code: "5.13", desc: "Sử dụng hóa chất cấm khi chưa được EHS kiểm tra", point: 4 }, { code: "5.14", desc: "Hóa chất không có MSDS", point: 6 }, { code: "5.15", desc: "Để nhiễu, chảy tràn hóa chất ra sàn, môi trường", point: 4 }, { code: "5.16", desc: "Hóa chất không được lưu trữ trong các dụng cụ chuyên dụng", point: 4 }, { code: "5.other", desc: "Lỗi khác (Hóa chất)", point: 0 } ] },
+  { group: "Biển cảnh báo", items: [ { code: "6.1", desc: "Khu vực nguy hiểm không có cảnh báo", point: 4 }, { code: "6.2", desc: "Sử dụng không đúng cảnh báo", point: 2 }, { code: "6.3", desc: "Bảng/băng/dây cảnh báo bị mờ, bong tróc", point: 2 }, { code: "6.4", desc: "Cảnh báo dơ bẩn không được vệ sinh", point: 4 }, { code: "6.5", desc: "Để đồ che chắn cảnh báo", point: 4 }, { code: "6.6", desc: "Vị trí sửa chữa nguy hiểm không có cảnh báo", point: 6 }, { code: "6.7", desc: "Không LOTO trước khi sửa chữa", point: 4 }, { code: "6.8", desc: "Không thông báo làm việc tia lửa, trên cao…", point: 6 }, { code: "6.9", desc: "Không treo cảnh báo khi sạc xe nâng", point: 4 }, { code: "6.10", desc: "Nguồn điện cao không có cảnh báo", point: 4 }, { code: "6.11", desc: "Không treo cảnh báo khi dùng thang/ sai thời gian", point: 4 }, { code: "6.12", desc: "Không khóa cửa thang khi không dùng", point: 4 }, { code: "6.13", desc: "Vị trí có hố sâu không có rào/cảnh báo", point: 4 }, { code: "6.other", desc: "Lỗi khác (Cảnh báo)", point: 0 } ] },
+  { group: "Phân loại rác", items: [ { code: "7.1", desc: "Không tiến hành phân loại rác", point: 6 }, { code: "7.2", desc: "Phân loại rác không đúng quy định", point: 4 }, { code: "7.other", desc: "Lỗi khác (Rác)", point: 0 } ] },
+  { group: "Phòng cháy chữa cháy", items: [ { code: "8.1", desc: "Không trang bị bình chữa cháy", point: 6 }, { code: "8.2", desc: "Che chắn lối thoát hiểm", point: 6 }, { code: "8.3", desc: "Che chắn bình/tủ chữa cháy", point: 6 }, { code: "8.4", desc: "Che chắn nút kéo chuông báo cháy", point: 4 }, { code: "8.5", desc: "Dụng cụ chữa cháy dùng sai mục đích", point: 4 }, { code: "8.6", desc: "Vật liệu dễ cháy gần nguồn nhiệt", point: 4 }, { code: "8.7", desc: "Không kiểm tra PCCC định kỳ tháng", point: 4 }, { code: "8.8", desc: "Tự ý di dời/để bình sai nơi quy định", point: 4 }, { code: "8.other", desc: "Lỗi khác (PCCC)", point: 0 } ] },
+  { group: "Máy móc", items: [ { code: "9.1", desc: "Máy không có SOP", point: 6 }, { code: "9.2", desc: "SOP không cập nhật mới", point: 4 }, { code: "9.3", desc: "Che chắn thông tin SOP", point: 4 }, { code: "9.4", desc: "Tem nhãn hướng dẫn rách/bong", point: 4 }, { code: "9.5", desc: "Nút điều khiển không có tiếng Việt", point: 4 }, { code: "9.6", desc: "Thiết bị chuyển động không có hộp bảo vệ", point: 6 }, { code: "9.7", desc: "Không tắt máy khi không sử dụng", point: 4 }, { code: "9.9", desc: "Không tắt điện/nước khi không làm việc", point: 4 }, { code: "9.10", desc: "Che chắn Sensor an toàn", point: 6 }, { code: "9.11", desc: "Không có DS nhân viên vận hành lò", point: 4 }, { code: "9.12", desc: "Thiết bị hư không báo sửa chữa", point: 4 }, { code: "9.14", desc: "Không kiểm tra quạt", point: 2 }, { code: "9.15", desc: "Không kiểm tra trước khi vận hành", point: 4 }, { code: "9.16", desc: "Không có thẻ CNVH khi dùng vật sắc", point: 4 }, { code: "9.17", desc: "Chưa đào tạo chứng nhận vận hành", point: 6 }, { code: "9.other", desc: "Lỗi khác (Máy móc)", point: 0 } ] },
+  { group: "Nguyên vật liệu", items: [ { code: "10.1", desc: "Chất cao >1m5 không quấn PE", point: 4 }, { code: "10.2", desc: "Nguyên liệu không để trên pallet", point: 2 }, { code: "10.3", desc: "Khiêng vật liệu nặng 1 người", point: 4 }, { code: "10.4", desc: "Thùng móp bể không thay/ chất lẫn kích thước", point: 4 }, { code: "10.5", desc: "Không có dây đai chống ngã nguyên liệu", point: 4 }, { code: "10.6", desc: "Chất hàng không đúng quy định/không gọn", point: 2 }, { code: "10.7", desc: "Di chuyển VL không dùng dây đai cố định", point: 4 }, { code: "10.8", desc: "Không cố định cuộn nguyên liệu", point: 4 }, { code: "10.other", desc: "Lỗi khác (Nguyên vật liệu)", point: 0 } ] },
+  { group: "Hành vi không an toàn", items: [ { code: "11.1", desc: "Cố ý làm hư máy móc thiết bị", point: 6 }, { code: "11.2", desc: "Cố ý làm hư phương tiện PCCC", point: 6 }, { code: "11.3", desc: "Leo cao không dùng dây đai", point: 6 }, { code: "11.4", desc: "Dụng cụ tự chế nguy hiểm", point: 4 }, { code: "11.5", desc: "Mang bật lửa/thuốc lá nơi dễ cháy", point: 6 }, { code: "11.6", desc: "Hút thuốc khu vực cấm", point: 6 }, { code: "11.7", desc: "Cố ý làm mất chức năng an toàn", point: 6 }, { code: "11.8", desc: "Tự ý đổi thao tác/quy trình/kết cấu", point: 6 }, { code: "11.9", desc: "Đưa tay vào thiết bị chuyển động", point: 6 }, { code: "11.10", desc: "Dùng ĐT cá nhân/đeo tai phone khi làm", point: 4 }, { code: "11.11", desc: "Không cuộn gọn tóc vào nón khi vận hành", point: 4 }, { code: "11.12", desc: "Phát hiện hư không báo sửa", point: 4 }, { code: "11.13", desc: "Tự ý tháo cover/che chắn sensor", point: 6 }, { code: "11.14", desc: "Không hướng dẫn NV mới theo AT", point: 6 }, { code: "11.15", desc: "Không hướng dẫn giám sát AT nhà thầu", point: 6 }, { code: "11.16", desc: "Lưu trữ vật nguy hiểm ở tủ cá nhân", point: 6 }, { code: "11.17", desc: "Vứt rác/khạc nhổ bừa bãi", point: 4 }, { code: "11.other", desc: "Lỗi khác (Hành vi)", point: 0 } ] },
+  { group: "Thái độ hợp tác", items: [ { code: "12.1", desc: "Không hợp tác xử lý an toàn", point: 6 }, { code: "12.2", desc: "Thái độ đe dọa", point: 6 }, { code: "12.3", desc: "Đánh người", point: 6 }, { code: "12.4", desc: "QL không xử lý vi phạm của nhân viên", point: 6 }, { code: "12.other", desc: "Lỗi khác (Thái độ)", point: 0 } ] },
   { group: "Lỗi Khác", items: []},
 ];
 
@@ -1042,11 +1041,12 @@ function DailyAudit({ user, isMobile, newErrorCounts, setGembaNotifCounts }) {
   const fileRef = useRef();
   const [thumbMap, setThumbMap] = useState({});
   const [improvementModal, setImprovementModal] = useState({ isOpen: false, error: null, index: -1 });
+  const [commentModal, setCommentModal] = useState({ isOpen: false, eventId: "", error: null });
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
   
   const dep = departments[depIndex];
   const heSo = calcHeSo(peopleCount);
-  const isCustomError = selectedGroup === "Lỗi Khác";
+  const isCustomError = selectedGroup === "Lỗi Khác" || (selectedError && selectedError.endsWith(".other"));
   const userRole = (user && user.role) ? user.role.toLowerCase() : "";
 
   // === Tự sửa chính tả ===
@@ -1239,14 +1239,17 @@ function DailyAudit({ user, isMobile, newErrorCounts, setGembaNotifCounts }) {
     }
 
     let newErrorObject;
-    if (isCustomError) {
-      const points = { Nhẹ: 2, Nặng: 4, "Nghiêm trọng": 6 };
-      // desc luôn là "Lỗi khác", nội dung chi tiết người đăng nằm trong note
-      newErrorObject = { group: selectedGroup, code: `custom-${Date.now()}`, desc: "Lỗi khác", point: points[otherErrorSeverity], timestamp: Timestamp.now(), imageUrls: urls, note: noteToUse, addedBy: user.name, isReminder, responsiblePerson };
+    const pointsMap = { Nhẹ: 2, Nặng: 4, "Nghiêm trọng": 6 };
+    if (selectedGroup === "Lỗi Khác") {
+      newErrorObject = { group: selectedGroup, code: `custom-${Date.now()}`, desc: "Lỗi khác", point: pointsMap[otherErrorSeverity], timestamp: Timestamp.now(), imageUrls: urls, note: noteToUse, addedBy: user.name, isReminder, responsiblePerson };
     } else {
       const errors = (errorGroups.find((g) => g.group === selectedGroup) || { items: [] }).items;
       const err = errors.find((e) => e.code === selectedError);
-      newErrorObject = { group: selectedGroup, ...err, timestamp: Timestamp.now(), imageUrls: urls, note: noteToUse, addedBy: user.name, isReminder, responsiblePerson };
+      let finalPoint = err?.point || 0;
+      if (selectedError && selectedError.endsWith(".other")) {
+        finalPoint = pointsMap[otherErrorSeverity];
+      }
+      newErrorObject = { group: selectedGroup, ...err, point: finalPoint, timestamp: Timestamp.now(), imageUrls: urls, note: noteToUse, addedBy: user.name, isReminder, responsiblePerson };
     }
     const docRef = doc(db, "gemba_scores", dep.name);
     const docSnap = await getDoc(docRef);
@@ -1527,12 +1530,12 @@ function DailyAudit({ user, isMobile, newErrorCounts, setGembaNotifCounts }) {
                 {errorGroups.map((g) => <option key={g.group} value={g.group}>{g.group}</option>)}
                 </select>
             </div>
-            {!isCustomError && selectedGroup && (
+            {selectedGroup && selectedGroup !== "Lỗi Khác" && (
               <div style={{ marginBottom: 15 }}>
                   <div style={{ fontSize: 15, color: colors.textPrimary, marginBottom: 5 }}>{t("gemba.error.label")}</div>
                   <select value={selectedError} onChange={(e) => setSelectedError(e.target.value)} style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: `1.5px solid ${colors.primaryLight}`, fontSize: 15 }}>
                   <option value="">{t("gemba.error.placeholder")}</option>
-                  {(errorGroups.find(g => g.group === selectedGroup)?.items || []).map(e => <option key={e.code} value={e.code}>{e.code} - {e.desc} ({e.point}đ)</option>)}
+                  {(errorGroups.find(g => g.group === selectedGroup)?.items || []).map(e => <option key={e.code} value={e.code}>{e.code} - {e.desc} ({e.point > 0 ? `${e.point}đ` : 'Tùy chỉnh'})</option>)}
                   </select>
               </div>
             )}
@@ -1632,6 +1635,25 @@ function DailyAudit({ user, isMobile, newErrorCounts, setGembaNotifCounts }) {
                           {e.isReminder ? "Nhắc nhở (Không trừ điểm)" : `Điểm trừ: ${((e.point + heSo) / 2).toFixed(2)}`}
                         </div>
                         <div style={{ marginTop: 8, display:'flex', justifyContent:'flex-end', gap:6, alignItems:'center' }}>
+                          <ActionButton 
+                            onClick={() => {
+                              const evId = `${dep.name}_${e.code || 'custom'}_${safeTsToDate(e.timestamp)?.getTime() || 'notime'}`;
+                              setCommentModal({ isOpen: true, eventId: evId, error: e });
+                            }} 
+                            title="Thảo luận / Bình luận" 
+                            color={colors.white} 
+                            bg={colors.primary}
+                          >
+                            💬
+                          </ActionButton>
+                          <ActionButton 
+                            onClick={() => handleShare(e, dep.name)} 
+                            title="Chia sẻ lỗi" 
+                            color={colors.white} 
+                            bg="#17a2b8"
+                          >
+                            🔗
+                          </ActionButton>
                           <ActionButton onClick={() => setImprovementModal({ isOpen: true, error: e, index: i })} title={t("gemba.improve.action")} color={colors.white} bg={isImproved ? '#4caf50' : '#f44336'}><ImprovementIcon /></ActionButton>
                           {(userRole === 'admin' || userRole === 'ehs') && (
                             <ActionButton onClick={() => handleDelete(i)} title={t("gemba.delete.action")} color="#d32f2f" bg="transparent">x</ActionButton>
@@ -1682,7 +1704,26 @@ function DailyAudit({ user, isMobile, newErrorCounts, setGembaNotifCounts }) {
                       <td style={{ padding: "10px 8px", textAlign: "center" }}>{(e.note || (e.group === 'Lỗi Khác' && e.desc !== 'Lỗi khác' ? e.desc : null)) && <button onClick={() => alert(`Ghi chú:\n\n${e.note || e.desc}`)} style={{ border: "none", background: "transparent", fontSize: 24, cursor: "pointer" }} title="Xem ghi chú">🗒️</button>}</td>
                       <td style={{ padding: "10px 8px", fontWeight: 700, color: colors.primary, textAlign: "center", fontSize: e.isReminder ? 12 : 14 }}>{e.isReminder ? "Nhắc nhở" : ((e.point + heSo) / 2).toFixed(2)}</td>
                       <td style={{ textAlign: "center" }}>
-                          <div style={{display: 'flex', justifyContent: 'center', alignItems: 'center'}}>
+                          <div style={{display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 4}}>
+                            <ActionButton 
+                              onClick={() => {
+                                const evId = `${dep.name}_${e.code || 'custom'}_${safeTsToDate(e.timestamp)?.getTime() || 'notime'}`;
+                                setCommentModal({ isOpen: true, eventId: evId, error: e });
+                              }} 
+                              title="Thảo luận" 
+                              color={colors.white} 
+                              bg={colors.primary}
+                            >
+                              💬
+                            </ActionButton>
+                            <ActionButton 
+                              onClick={() => handleShare(e, dep.name)} 
+                              title="Chia sẻ" 
+                              color={colors.white} 
+                              bg="#17a2b8"
+                            >
+                              🔗
+                            </ActionButton>
                             <ActionButton onClick={() => setImprovementModal({ isOpen: true, error: e, index: i })} title="Cải thiện/Khắc phục" color={colors.white} bg={isImproved ? "#4caf50" : "#f44336"}> <ImprovementIcon /> </ActionButton>
                             {(userRole === "admin" || userRole === "ehs") && ( <ActionButton onClick={() => handleDelete(i)} title="Xóa lỗi" color="#d32f2f" bg="transparent">x</ActionButton> )}
                           </div>
@@ -1724,9 +1765,174 @@ function DailyAudit({ user, isMobile, newErrorCounts, setGembaNotifCounts }) {
           </div>
         </div>
       </div>
+      
+      {/* Real-time Comment Modal */}
+      <CommentModal 
+        isOpen={commentModal.isOpen} 
+        onClose={() => setCommentModal({ isOpen: false, eventId: "", error: null })} 
+        eventId={commentModal.eventId} 
+        user={user} 
+      />
     </div>
   );
 }
+
+function CommentModal({ isOpen, onClose, eventId, user }) {
+  const [comments, setComments] = useState([]);
+  const [newComment, setNewComment] = useState("");
+  const [loadingComments, setLoadingComments] = useState(false);
+  const scrollRef = useRef();
+
+  useEffect(() => {
+    if (!isOpen || !eventId) return;
+    setLoadingComments(true);
+    const q = query(
+      collection(db, "audit_comments"),
+      where("eventId", "==", eventId)
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      const list = [];
+      snap.forEach(d => {
+        list.push({ id: d.id, ...d.data() });
+      });
+      list.sort((a, b) => {
+        const timeA = a.timestamp?.seconds ? a.timestamp.seconds * 1000 : a.timestamp || 0;
+        const timeB = b.timestamp?.seconds ? b.timestamp.seconds * 1000 : b.timestamp || 0;
+        return timeA - timeB;
+      });
+      setComments(list);
+      setLoadingComments(false);
+      
+      setTimeout(() => {
+        if (scrollRef.current) {
+          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
+      }, 50);
+    });
+    return unsub;
+  }, [isOpen, eventId]);
+
+  const handleSend = async () => {
+    if (!newComment.trim()) return;
+    const txt = newComment.trim();
+    setNewComment("");
+    try {
+      await addDoc(collection(db, "audit_comments"), {
+        eventId,
+        userId: user.uid,
+        userName: user.name,
+        text: txt,
+        timestamp: serverTimestamp()
+      });
+    } catch (err) {
+      console.error("Lỗi gửi bình luận:", err);
+      alert("Không thể gửi bình luận.");
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1002 }}>
+      <div style={{ background: colors.surface, padding: 22, borderRadius: 12, width: '90%', maxWidth: 500, height: 500, display: 'flex', flexDirection: 'column', boxShadow: "0 4px 15px rgba(0,0,0,.2)" }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `2.5px solid ${colors.primaryLight}`, paddingBottom: 10, marginBottom: 12 }}>
+          <h3 style={{ margin: 0, color: colors.primary }}>Ý kiến phản hồi / Thảo luận</h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#888' }}>✕</button>
+        </div>
+        
+        <div ref={scrollRef} style={{ flexGrow: 1, overflowY: 'auto', marginBottom: 15, paddingRight: 5 }}>
+          {loadingComments ? (
+            <div style={{ textAlign: 'center', color: '#888', marginTop: 20 }}>Đang tải bình luận...</div>
+          ) : comments.length === 0 ? (
+            <div style={{ textAlign: 'center', color: '#888', marginTop: 20 }}>Chưa có bình luận nào cho lỗi này.</div>
+          ) : (
+            comments.map(c => {
+              const isMe = c.userId === user.uid;
+              const date = c.timestamp ? (c.timestamp.toDate ? c.timestamp.toDate() : new Date(c.timestamp)) : null;
+              const dateStr = date ? date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + ' ' + date.toLocaleDateString('vi-VN') : '';
+              return (
+                <div key={c.id} style={{ display: 'flex', flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start', marginBottom: 12 }}>
+                  <div style={{ fontSize: 11, color: colors.textSecondary, marginBottom: 2 }}>{c.userName} • {dateStr}</div>
+                  <div style={{
+                    background: isMe ? colors.primary : '#f1f1f1',
+                    color: isMe ? colors.white : colors.textPrimary,
+                    padding: '8px 14px',
+                    borderRadius: 14,
+                    borderTopRightRadius: isMe ? 2 : 14,
+                    borderTopLeftRadius: isMe ? 14 : 2,
+                    maxWidth: '85%',
+                    fontSize: 14,
+                    wordBreak: 'break-word',
+                    lineHeight: '1.4'
+                  }}>
+                    {c.text}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            type="text"
+            value={newComment}
+            onChange={e => setNewComment(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleSend(); }}
+            placeholder="Nhập nội dung phản hồi..."
+            style={{ flexGrow: 1, padding: '8px 12px', borderRadius: 8, border: `1.5px solid ${colors.primaryLight}`, fontSize: 14, outline: 'none' }}
+          />
+          <button
+            onClick={handleSend}
+            style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: colors.primary, color: colors.white, fontWeight: 700, cursor: 'pointer' }}
+          >
+            Gửi
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const copyToClipboard = (text) => {
+  navigator.clipboard.writeText(text)
+    .then(() => {
+      alert("Đã sao chép thông tin lỗi vào bộ nhớ tạm (clipboard)!");
+    })
+    .catch((err) => {
+      console.error("Clipboard copy failed:", err);
+      alert("Không thể tự động sao chép. Hãy copy thủ công.");
+    });
+};
+
+const handleShare = async (eItem, depName) => {
+  const timeStr = eItem.timestamp ? (eItem.timestamp.toDate ? eItem.timestamp.toDate().toLocaleString("vi-VN") : new Date(eItem.timestamp).toLocaleString("vi-VN")) : "";
+  const images = eItem.imageUrls || (eItem.imageUrl ? [eItem.imageUrl] : []);
+  const imgUrl = images.length > 0 ? images[0] : "";
+  const shareText = `[SafeOne Daily Audit] Lỗi được phát hiện tại bộ phận ${depName}:\n` +
+    `- Nhóm: ${eItem.group}\n` +
+    `- Chi tiết: ${eItem.group === 'Lỗi Khác' ? 'Lỗi khác' : eItem.desc}\n` +
+    `- Ghi chú: ${eItem.note || "Không có"}\n` +
+    `- Người phát hiện: ${eItem.addedBy || ""}\n` +
+    `- Thời gian: ${timeStr}\n` +
+    (imgUrl ? `- Link ảnh lỗi: ${imgUrl}` : "");
+
+  if (navigator.share) {
+    try {
+      await navigator.share({
+        title: "SafeOne Daily Audit finding",
+        text: shareText,
+      });
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        console.error("navigator.share failed, fallback to clipboard:", err);
+        copyToClipboard(shareText);
+      }
+    }
+  } else {
+    copyToClipboard(shareText);
+  }
+};
 
 // ====================== CLEANUP FUNCTION ======================
 async function runCleanup() {
