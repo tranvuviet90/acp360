@@ -308,9 +308,10 @@ export function ConfirmProvider({ children }) {
 }
 
 /**
- * LightboxSwipeOnly (Premium 3-Panel Viewport Slider)
+ * LightboxSwipeOnly (Premium 3-Panel Viewport Slider with Image Zoom/Pan Support)
  * - Màn hình lớn & nhỏ: kéo trượt ngang để xem ảnh kế tiếp/trước đó theo thời gian thực (real-time peeking).
  * - Cạnh trái & cạnh phải hiển thị sẵn ảnh kế tiếp/trước đó để mang lại trải nghiệm liền mạch 100%.
+ * - Hỗ trợ phóng to/thu nhỏ ảnh và kéo pan xung quanh khi đang zoom.
  * - Hỗ trợ nút mũi tên điều hướng trên máy tính và nút tắt đóng/backdrop.
  */
 export default function LightboxSwipeOnly({
@@ -326,11 +327,18 @@ export default function LightboxSwipeOnly({
   const [activePanel, setActivePanel] = useState("center"); // 'prev' | 'center' | 'next'
   const [localIndex, setLocalIndex] = useState(index);
   
+  const [scale, setScale] = useState(1);
+  const [translateX, setTranslateX] = useState(0);
+  const [translateY, setTranslateY] = useState(0);
+  
   const isDragging = useRef(false);
   const startX = useRef(0);
+  const startY = useRef(0);
   const currentX = useRef(0);
+  const currentY = useRef(0);
   const lastTime = useRef(0);
   const lastX = useRef(0);
+  const lastY = useRef(0);
   const velocity = useRef(0);
   const trackRef = useRef(null);
 
@@ -342,6 +350,13 @@ export default function LightboxSwipeOnly({
       setLocalIndex(index);
     }
   }, [open, index]);
+
+  // Reset zoom whenever localIndex changes
+  useEffect(() => {
+    setScale(1);
+    setTranslateX(0);
+    setTranslateY(0);
+  }, [localIndex]);
 
   // Tính toán chỉ số ảnh cho 3 panel
   const prevIdx = useMemo(() => (localIndex - 1 + total) % total, [localIndex, total]);
@@ -365,12 +380,12 @@ export default function LightboxSwipeOnly({
     if (!open) return;
     const onKey = (e) => {
       if (e.key === "Escape") onClose?.();
-      if (e.key === "ArrowLeft" && total > 1) handlePrevTransition();
-      if (e.key === "ArrowRight" && total > 1) handleNextTransition();
+      if (e.key === "ArrowLeft" && total > 1 && scale === 1) handlePrevTransition();
+      if (e.key === "ArrowRight" && total > 1 && scale === 1) handleNextTransition();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, total, localIndex]);
+  }, [open, total, localIndex, scale]);
 
   // Tải trước (preload) các ảnh xung quanh
   useEffect(() => {
@@ -418,11 +433,14 @@ export default function LightboxSwipeOnly({
 
   // Bắt đầu kéo (Pointer Down)
   const onPointerDown = (e) => {
-    if (!open || total <= 1 || isTransitioning || e.button === 2) return;
+    if (!open || isTransitioning || e.button === 2) return;
     isDragging.current = true;
     startX.current = e.clientX;
+    startY.current = e.clientY;
     currentX.current = e.clientX;
+    currentY.current = e.clientY;
     lastX.current = e.clientX;
+    lastY.current = e.clientY;
     lastTime.current = performance.now();
     velocity.current = 0;
     
@@ -434,19 +452,30 @@ export default function LightboxSwipeOnly({
   const onPointerMove = (e) => {
     if (!isDragging.current) return;
     const clientX = e.clientX;
+    const clientY = e.clientY;
     currentX.current = clientX;
+    currentY.current = clientY;
     
-    const now = performance.now();
-    const dt = now - lastTime.current;
-    if (dt > 10) {
-      const dx = clientX - lastX.current;
-      velocity.current = dx / dt; // px/ms
-      lastX.current = clientX;
-      lastTime.current = now;
+    if (scale > 1) {
+      // Pan the image instead of swiping
+      setTranslateX((prev) => prev + (clientX - lastX.current));
+      setTranslateY((prev) => prev + (clientY - lastY.current));
+    } else {
+      const now = performance.now();
+      const dt = now - lastTime.current;
+      if (dt > 10) {
+        const dx = clientX - lastX.current;
+        velocity.current = dx / dt; // px/ms
+        lastX.current = clientX;
+        lastTime.current = now;
+      }
+      
+      const dragDistance = clientX - startX.current;
+      setOffsetX(dragDistance);
     }
     
-    const dragDistance = clientX - startX.current;
-    setOffsetX(dragDistance);
+    lastX.current = clientX;
+    lastY.current = clientY;
   };
 
   // Kết thúc kéo (Pointer Up / Cancel)
@@ -456,6 +485,10 @@ export default function LightboxSwipeOnly({
     try {
       e.currentTarget.releasePointerCapture(e.pointerId);
     } catch (err) {}
+
+    if (scale > 1) {
+      return;
+    }
 
     const dragDistance = currentX.current - startX.current;
     const threshold = window.innerWidth * 0.22; // Cần kéo ít nhất 22% chiều rộng màn hình
@@ -500,11 +533,24 @@ export default function LightboxSwipeOnly({
     }
   };
 
+  const handleDoubleClick = (e) => {
+    e.stopPropagation();
+    if (scale > 1) {
+      setScale(1);
+      setTranslateX(0);
+      setTranslateY(0);
+    } else {
+      setScale(2.5);
+      setTranslateX(0);
+      setTranslateY(0);
+    }
+  };
+
   if (!open) return null;
 
   // Tính toán translate của track dựa trên panel và khoảng cách drag bằng px nguyên bản để tăng hiệu suất mobile (không dùng calc)
   let tx = -window.innerWidth;
-  if (isDragging.current) {
+  if (isDragging.current && scale === 1) {
     tx = -window.innerWidth + offsetX;
   } else if (isTransitioning) {
     if (activePanel === "next") {
@@ -524,6 +570,18 @@ export default function LightboxSwipeOnly({
     transform: `translate3d(${tx}px, 0, 0)`,
     transition: isTransitioning ? "transform 0.3s cubic-bezier(0.215, 0.61, 0.355, 1)" : "none",
     willChange: "transform",
+  };
+
+  const activeImageStyle = {
+    maxWidth: "100%",
+    maxHeight: "85vh",
+    objectFit: "contain",
+    borderRadius: 12,
+    boxShadow: "0 10px 40px rgba(0,0,0,0.6)",
+    transform: `translate3d(${translateX}px, ${translateY}px, 0) scale(${scale})`,
+    transition: isDragging.current ? "none" : "transform 0.15s ease-out",
+    willChange: "transform",
+    cursor: scale > 1 ? "move" : "default",
   };
 
   return (
@@ -642,8 +700,53 @@ export default function LightboxSwipeOnly({
         </button>
       )}
 
+      {/* Zoom In Button */}
+      {total > 0 && (
+        <button
+          onClick={() => setScale(s => Math.min(4, s + 0.5))}
+          className="lightbox-btn"
+          style={{
+            position: "absolute",
+            top: 20,
+            right: 140,
+            zIndex: 11002,
+            fontSize: 18,
+          }}
+          title="Phóng to"
+        >
+          ➕
+        </button>
+      )}
+
+      {/* Zoom Out Button */}
+      {total > 0 && (
+        <button
+          onClick={() => {
+            setScale(s => {
+              const next = Math.max(1, s - 0.5);
+              if (next === 1) {
+                setTranslateX(0);
+                setTranslateY(0);
+              }
+              return next;
+            });
+          }}
+          className="lightbox-btn"
+          style={{
+            position: "absolute",
+            top: 20,
+            right: 200,
+            zIndex: 11002,
+            fontSize: 18,
+          }}
+          title="Thu nhỏ"
+        >
+          ➖
+        </button>
+      )}
+
       {/* Desktop Arrow Buttons */}
-      {total > 1 && !isTransitioning && (
+      {total > 1 && !isTransitioning && scale === 1 && (
         <>
           <button
             onClick={handlePrevTransition}
@@ -672,7 +775,7 @@ export default function LightboxSwipeOnly({
           overflow: "hidden",
           position: "relative",
           touchAction: "none",
-          cursor: isDragging.current ? "grabbing" : "grab",
+          cursor: isDragging.current ? "grabbing" : (scale > 1 ? "move" : "grab"),
         }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -730,21 +833,23 @@ export default function LightboxSwipeOnly({
             onClick={onClose}
           >
             {list[localIndex] && (
-              <img
-                src={list[localIndex]}
-                alt=""
-                draggable={false}
+              <div
                 onClick={(e) => e.stopPropagation()}
+                onDoubleClick={handleDoubleClick}
                 style={{
+                  display: "inline-block",
+                  position: "relative",
                   maxWidth: "100%",
                   maxHeight: "85vh",
-                  objectFit: "contain",
-                  borderRadius: 12,
-                  boxShadow: "0 10px 40px rgba(0,0,0,0.6)",
-                  pointerEvents: "none",
-                  WebkitUserDrag: "none",
                 }}
-              />
+              >
+                <img
+                  src={list[localIndex]}
+                  alt=""
+                  draggable={false}
+                  style={activeImageStyle}
+                />
+              </div>
             )}
           </div>
 

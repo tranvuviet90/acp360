@@ -1646,14 +1646,6 @@ function DailyAudit({ user, isMobile, newErrorCounts, setGembaNotifCounts }) {
                           >
                             💬
                           </ActionButton>
-                          <ActionButton 
-                            onClick={() => handleShare(e, dep.name)} 
-                            title="Chia sẻ lỗi" 
-                            color={colors.white} 
-                            bg="#17a2b8"
-                          >
-                            🔗
-                          </ActionButton>
                           <ActionButton onClick={() => setImprovementModal({ isOpen: true, error: e, index: i })} title={t("gemba.improve.action")} color={colors.white} bg={isImproved ? '#4caf50' : '#f44336'}><ImprovementIcon /></ActionButton>
                           {(userRole === 'admin' || userRole === 'ehs') && (
                             <ActionButton onClick={() => handleDelete(i)} title={t("gemba.delete.action")} color="#d32f2f" bg="transparent">x</ActionButton>
@@ -1715,14 +1707,6 @@ function DailyAudit({ user, isMobile, newErrorCounts, setGembaNotifCounts }) {
                               bg={colors.primary}
                             >
                               💬
-                            </ActionButton>
-                            <ActionButton 
-                              onClick={() => handleShare(e, dep.name)} 
-                              title="Chia sẻ" 
-                              color={colors.white} 
-                              bg="#17a2b8"
-                            >
-                              🔗
                             </ActionButton>
                             <ActionButton onClick={() => setImprovementModal({ isOpen: true, error: e, index: i })} title="Cải thiện/Khắc phục" color={colors.white} bg={isImproved ? "#4caf50" : "#f44336"}> <ImprovementIcon /> </ActionButton>
                             {(userRole === "admin" || userRole === "ehs") && ( <ActionButton onClick={() => handleDelete(i)} title="Xóa lỗi" color="#d32f2f" bg="transparent">x</ActionButton> )}
@@ -1894,45 +1878,7 @@ function CommentModal({ isOpen, onClose, eventId, user }) {
   );
 }
 
-const copyToClipboard = (text) => {
-  navigator.clipboard.writeText(text)
-    .then(() => {
-      alert("Đã sao chép thông tin lỗi vào bộ nhớ tạm (clipboard)!");
-    })
-    .catch((err) => {
-      console.error("Clipboard copy failed:", err);
-      alert("Không thể tự động sao chép. Hãy copy thủ công.");
-    });
-};
 
-const handleShare = async (eItem, depName) => {
-  const timeStr = eItem.timestamp ? (eItem.timestamp.toDate ? eItem.timestamp.toDate().toLocaleString("vi-VN") : new Date(eItem.timestamp).toLocaleString("vi-VN")) : "";
-  const images = eItem.imageUrls || (eItem.imageUrl ? [eItem.imageUrl] : []);
-  const imgUrl = images.length > 0 ? images[0] : "";
-  const shareText = `[SafeOne Daily Audit] Lỗi được phát hiện tại bộ phận ${depName}:\n` +
-    `- Nhóm: ${eItem.group}\n` +
-    `- Chi tiết: ${eItem.group === 'Lỗi Khác' ? 'Lỗi khác' : eItem.desc}\n` +
-    `- Ghi chú: ${eItem.note || "Không có"}\n` +
-    `- Người phát hiện: ${eItem.addedBy || ""}\n` +
-    `- Thời gian: ${timeStr}\n` +
-    (imgUrl ? `- Link ảnh lỗi: ${imgUrl}` : "");
-
-  if (navigator.share) {
-    try {
-      await navigator.share({
-        title: "SafeOne Daily Audit finding",
-        text: shareText,
-      });
-    } catch (err) {
-      if (err.name !== 'AbortError') {
-        console.error("navigator.share failed, fallback to clipboard:", err);
-        copyToClipboard(shareText);
-      }
-    }
-  } else {
-    copyToClipboard(shareText);
-  }
-};
 
 // ====================== CLEANUP FUNCTION ======================
 async function runCleanup() {
