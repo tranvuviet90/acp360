@@ -43,7 +43,15 @@ export async function callAIService(prompt, history = [], fallbackUrl) {
       if (apiKey && apiKey.trim() !== "" && apiKey !== "MOCKED_SAVED_KEY") {
         if (provider === 'google') {
           // Gọi API chính thức của Google Gemini
-          const geminiModel = model || 'gemini-2.0-flash';
+          let geminiModel = model || 'gemini-2.5-flash';
+          
+          // Tự động chuyển đổi các mô hình cũ đã bị Google ngừng hỗ trợ sang mô hình mới hơn
+          if (geminiModel === 'gemini-2.0-flash' || geminiModel === 'gemini-1.5-flash') {
+            geminiModel = 'gemini-2.5-flash';
+          } else if (geminiModel === 'gemini-1.5-pro') {
+            geminiModel = 'gemini-2.5-pro';
+          }
+
           const url = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${apiKey}`;
 
           // Format tin nhắn từ history sang Gemini format

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { db, storage } from "../firebase";
-import { collection, addDoc, deleteDoc, doc, onSnapshot, serverTimestamp, query, where } from "firebase/firestore";
+import { collection, addDoc, deleteDoc, doc, onSnapshot, serverTimestamp, query, where, updateDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { useToast, useConfirm } from "./LightboxSwipeOnly";
 import { colors } from "../theme";
@@ -12,7 +12,8 @@ import {
   IoSearchOutline, 
   IoCloseOutline, 
   IoEyeOutline, 
-  IoFileTrayOutline
+  IoFileTrayOutline,
+  IoCreateOutline
 } from "react-icons/io5";
 import BookViewer3D from "./BookViewer3D";
 
@@ -33,9 +34,18 @@ export default function DocumentManager({ user, isMobile }) {
   // Upload form state
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [uploadTitle, setUploadTitle] = useState("");
-  const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedFileVi, setSelectedFileVi] = useState(null);
+  const [selectedFileEn, setSelectedFileEn] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+
+  // Edit form state
+  const [editingDoc, setEditingDoc] = useState(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editFileVi, setEditFileVi] = useState(null);
+  const [editFileEn, setEditFileEn] = useState(null);
+  const [editUploading, setEditUploading] = useState(false);
+  const [editProgress, setEditProgress] = useState(0);
 
   // PDF Viewer modal state
   const [viewingDoc, setViewingDoc] = useState(null);
@@ -97,21 +107,39 @@ export default function DocumentManager({ user, isMobile }) {
       );
     });
 
-  // Handle file select
-  const handleFileChange = (e) => {
+  // Handle file select - Vi
+  const handleFileChangeVi = (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
     if (file.type !== "application/pdf") {
       pushToast("Chỉ hỗ trợ tải lên file PDF!", "warning");
-      setSelectedFile(null);
+      setSelectedFileVi(null);
       e.target.value = "";
       return;
     }
 
-    setSelectedFile(file);
+    setSelectedFileVi(file);
     if (!uploadTitle) {
-      // Set default title from file name (removing the .pdf extension)
+      const nameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
+      setUploadTitle(nameWithoutExt);
+    }
+  };
+
+  // Handle file select - En
+  const handleFileChangeEn = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (file.type !== "application/pdf") {
+      pushToast("Chỉ hỗ trợ tải lên file PDF!", "warning");
+      setSelectedFileEn(null);
+      e.target.value = "";
+      return;
+    }
+
+    setSelectedFileEn(file);
+    if (!uploadTitle) {
       const nameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
       setUploadTitle(nameWithoutExt);
     }
@@ -125,8 +153,8 @@ export default function DocumentManager({ user, isMobile }) {
       return;
     }
 
-    if (!selectedFile) {
-      pushToast("Vui lòng chọn file PDF để tải lên", "warning");
+    if (!selectedFileVi && !selectedFileEn) {
+      pushToast("Vui lòng chọn ít nhất một file PDF (Tiếng Việt hoặc Tiếng Anh)", "warning");
       return;
     }
 
@@ -139,41 +167,80 @@ export default function DocumentManager({ user, isMobile }) {
     setUploadProgress(10);
 
     try {
-      const cleanFileName = `${Date.now()}_${selectedFile.name.replace(/\s+/g, "_")}`;
-      const storagePath = `documents/${activeSubTab}/${cleanFileName}`;
-      const storageRef = ref(storage, storagePath);
+      let fileUrlVi = "";
+      let storagePathVi = "";
+      let fileUrlEn = "";
+      let storagePathEn = "";
 
-      // Upload bytes with explicit metadata content-type to allow inline PDF viewing
-      const metadata = { contentType: "application/pdf" };
-      
-      setUploadProgress(30);
-      await uploadBytes(storageRef, selectedFile, metadata);
-      
-      setUploadProgress(70);
-      const fileUrl = await getDownloadURL(storageRef);
+      // 1. Upload Vietnamese PDF if selected
+      if (selectedFileVi) {
+        setUploadProgress(20);
+        const cleanFileNameVi = `${Date.now()}_vi_${selectedFileVi.name.replace(/\s+/g, "_")}`;
+        const pathVi = `documents/${activeSubTab}/${cleanFileNameVi}`;
+        const refVi = ref(storage, pathVi);
+        await uploadBytes(refVi, selectedFileVi, { contentType: "application/pdf" });
+        fileUrlVi = await getDownloadURL(refVi);
+        storagePathVi = pathVi;
+      }
 
-      setUploadProgress(90);
+      // 2. Upload English PDF if selected
+      if (selectedFileEn) {
+        setUploadProgress(50);
+        const cleanFileNameEn = `${Date.now()}_en_${selectedFileEn.name.replace(/\s+/g, "_")}`;
+        const pathEn = `documents/${activeSubTab}/${cleanFileNameEn}`;
+        const refEn = ref(storage, pathEn);
+        await uploadBytes(refEn, selectedFileEn, { contentType: "application/pdf" });
+        fileUrlEn = await getDownloadURL(refEn);
+        storagePathEn = pathEn;
+      }
+
+      setUploadProgress(80);
+      
       // Save metadata to Firestore
-      await addDoc(collection(db, "documents"), {
+      const docData = {
         title: uploadTitle.trim(),
-        fileName: selectedFile.name,
-        fileUrl: fileUrl,
-        storagePath: storagePath,
         type: activeSubTab,
         createdAt: serverTimestamp(),
         uploadedBy: user?.name || user?.email || "Admin",
-      });
+      };
+
+      if (selectedFileVi) {
+        docData.fileUrl = fileUrlVi;
+        docData.storagePath = storagePathVi;
+        docData.fileName = selectedFileVi.name;
+        
+        docData.fileUrlVi = fileUrlVi;
+        docData.storagePathVi = storagePathVi;
+        docData.fileNameVi = selectedFileVi.name;
+      }
+
+      if (selectedFileEn) {
+        docData.fileUrlEn = fileUrlEn;
+        docData.storagePathEn = storagePathEn;
+        docData.fileNameEn = selectedFileEn.name;
+        
+        if (!selectedFileVi) {
+          docData.fileUrl = fileUrlEn;
+          docData.storagePath = storagePathEn;
+          docData.fileName = selectedFileEn.name;
+        }
+      }
+
+      await addDoc(collection(db, "documents"), docData);
+      setUploadProgress(100);
 
       pushToast("Tải lên tài liệu thành công!", "success");
       
       // Reset form
       setUploadTitle("");
-      setSelectedFile(null);
+      setSelectedFileVi(null);
+      setSelectedFileEn(null);
       setShowUploadForm(false);
       
-      // Reset input element
-      const fileInput = document.getElementById("pdf-file-input");
-      if (fileInput) fileInput.value = "";
+      const fileInputVi = document.getElementById("pdf-file-input-vi");
+      if (fileInputVi) fileInputVi.value = "";
+      const fileInputEn = document.getElementById("pdf-file-input-en");
+      if (fileInputEn) fileInputEn.value = "";
 
     } catch (error) {
       console.error("Lỗi khi tải tài liệu lên:", error);
@@ -181,6 +248,114 @@ export default function DocumentManager({ user, isMobile }) {
     } finally {
       setUploading(false);
       setUploadProgress(0);
+    }
+  };
+
+  // Handle document update (Admin only)
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    if (!isAdmin) {
+      pushToast("Bạn không có quyền thực hiện chức năng này!", "error");
+      return;
+    }
+
+    if (!editTitle.trim()) {
+      pushToast("Vui lòng nhập tên tài liệu", "warning");
+      return;
+    }
+
+    setEditUploading(true);
+    setEditProgress(10);
+
+    try {
+      const updateData = {
+        title: editTitle.trim(),
+        updatedAt: serverTimestamp(),
+      };
+
+      // 1. If new Vietnamese file is selected
+      if (editFileVi) {
+        setEditProgress(25);
+        
+        // Delete old VI file if it existed
+        const oldPathVi = editingDoc.storagePathVi || editingDoc.storagePath;
+        if (oldPathVi) {
+          try {
+            await deleteObject(ref(storage, oldPathVi));
+          } catch (err) {
+            if (err.code !== "storage/object-not-found") console.error("Error deleting old VI file:", err);
+          }
+        }
+
+        // Upload new VI file
+        const cleanFileNameVi = `${Date.now()}_vi_${editFileVi.name.replace(/\s+/g, "_")}`;
+        const pathVi = `documents/${editingDoc.type}/${cleanFileNameVi}`;
+        const refVi = ref(storage, pathVi);
+        await uploadBytes(refVi, editFileVi, { contentType: "application/pdf" });
+        const fileUrlVi = await getDownloadURL(refVi);
+
+        updateData.fileUrl = fileUrlVi;
+        updateData.storagePath = pathVi;
+        updateData.fileName = editFileVi.name;
+        
+        updateData.fileUrlVi = fileUrlVi;
+        updateData.storagePathVi = pathVi;
+        updateData.fileNameVi = editFileVi.name;
+      }
+
+      // 2. If new English file is selected
+      if (editFileEn) {
+        setEditProgress(60);
+
+        // Delete old EN file if it existed
+        const oldPathEn = editingDoc.storagePathEn;
+        if (oldPathEn) {
+          try {
+            await deleteObject(ref(storage, oldPathEn));
+          } catch (err) {
+            if (err.code !== "storage/object-not-found") console.error("Error deleting old EN file:", err);
+          }
+        }
+
+        // Upload new EN file
+        const cleanFileNameEn = `${Date.now()}_en_${editFileEn.name.replace(/\s+/g, "_")}`;
+        const pathEn = `documents/${editingDoc.type}/${cleanFileNameEn}`;
+        const refEn = ref(storage, pathEn);
+        await uploadBytes(refEn, editFileEn, { contentType: "application/pdf" });
+        const fileUrlEn = await getDownloadURL(refEn);
+
+        updateData.fileUrlEn = fileUrlEn;
+        updateData.storagePathEn = pathEn;
+        updateData.fileNameEn = editFileEn.name;
+
+        // If document had no VI file, make EN the default fileUrl too
+        if (!editingDoc.fileUrlVi && !editingDoc.fileUrl && !editFileVi) {
+          updateData.fileUrl = fileUrlEn;
+          updateData.storagePath = pathEn;
+          updateData.fileName = editFileEn.name;
+        }
+      }
+
+      setEditProgress(90);
+      await updateDoc(doc(db, "documents", editingDoc.id), updateData);
+      setEditProgress(100);
+
+      pushToast("Cập nhật tài liệu thành công!", "success");
+      setEditingDoc(null);
+      setEditTitle("");
+      setEditFileVi(null);
+      setEditFileEn(null);
+      
+      const fileInputVi = document.getElementById("pdf-edit-input-vi");
+      if (fileInputVi) fileInputVi.value = "";
+      const fileInputEn = document.getElementById("pdf-edit-input-en");
+      if (fileInputEn) fileInputEn.value = "";
+    } catch (error) {
+      console.error("Lỗi khi cập nhật tài liệu:", error);
+      pushToast("Cập nhật tài liệu thất bại: " + error.message, "error");
+    } finally {
+      setEditUploading(false);
+      setEditProgress(0);
     }
   };
 
@@ -199,30 +374,31 @@ export default function DocumentManager({ user, isMobile }) {
     if (!confirm) return;
 
     try {
-      // 1. Delete file from Storage first
-      if (docData.storagePath) {
-        const fileRef = ref(storage, docData.storagePath);
+      // 1. Delete Vietnamese file from Storage
+      const pathVi = docData.storagePathVi || docData.storagePath;
+      if (pathVi) {
         try {
-          await deleteObject(fileRef);
-        } catch (storageError) {
-          // If file is not found in storage, log and proceed to delete firestore document
-          if (storageError.code !== "storage/object-not-found") {
-            console.error("Lỗi khi xóa file trong storage:", storageError);
-          }
-        }
-      } else if (docData.fileUrl) {
-        // Fallback if storagePath is missing but fileUrl is present
-        const fileRef = ref(storage, docData.fileUrl);
-        try {
-          await deleteObject(fileRef);
+          await deleteObject(ref(storage, pathVi));
         } catch (storageError) {
           if (storageError.code !== "storage/object-not-found") {
-            console.warn("Lỗi khi xóa file storage qua url:", storageError);
+            console.error("Lỗi khi xóa file tiếng Việt trong storage:", storageError);
           }
         }
       }
 
-      // 2. Delete document from Firestore
+      // 2. Delete English file from Storage
+      const pathEn = docData.storagePathEn;
+      if (pathEn) {
+        try {
+          await deleteObject(ref(storage, pathEn));
+        } catch (storageError) {
+          if (storageError.code !== "storage/object-not-found") {
+            console.error("Lỗi khi xóa file tiếng Anh trong storage:", storageError);
+          }
+        }
+      }
+
+      // 3. Delete document from Firestore
       await deleteDoc(doc(db, "documents", docData.id));
       pushToast("Đã xóa tài liệu thành công!", "success");
     } catch (error) {
@@ -431,22 +607,46 @@ export default function DocumentManager({ user, isMobile }) {
             Tải lên tài liệu mới vào danh mục: <span style={{ textTransform: "uppercase", color: colors.primary }}>{activeSubTab}</span>
           </h3>
           <form onSubmit={handleUpload} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 16 }}>
+            <div>
               {/* Title input */}
+              <label style={{ display: "block", marginBottom: 6, fontSize: 14, fontWeight: 600, color: colors.textPrimary }}>
+                Tên tài liệu <span style={{ color: colors.error }}>*</span>
+              </label>
+              <input
+                type="text"
+                placeholder="Nhập tiêu đề hoặc tên hiển thị của tài liệu..."
+                value={uploadTitle}
+                onChange={(e) => setUploadTitle(e.target.value)}
+                disabled={uploading}
+                required
+                style={{
+                  width: "100%",
+                  padding: 11,
+                  borderRadius: 8,
+                  border: `1.5px solid ${colors.border}`,
+                  fontSize: 14,
+                  boxSizing: "border-box",
+                  background: colors.white,
+                  outline: "none"
+                }}
+              />
+            </div>
+
+            <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 16 }}>
+              {/* File picker Vi */}
               <div style={{ flex: 1 }}>
                 <label style={{ display: "block", marginBottom: 6, fontSize: 14, fontWeight: 600, color: colors.textPrimary }}>
-                  Tên tài liệu <span style={{ color: colors.error }}>*</span>
+                  File PDF Tiếng Việt (🇻🇳)
                 </label>
                 <input
-                  type="text"
-                  placeholder="Nhập tiêu đề hoặc tên hiển thị của tài liệu..."
-                  value={uploadTitle}
-                  onChange={(e) => setUploadTitle(e.target.value)}
+                  id="pdf-file-input-vi"
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  onChange={handleFileChangeVi}
                   disabled={uploading}
-                  required
                   style={{
                     width: "100%",
-                    padding: 11,
+                    padding: "8px 11px",
                     borderRadius: 8,
                     border: `1.5px solid ${colors.border}`,
                     fontSize: 14,
@@ -457,18 +657,17 @@ export default function DocumentManager({ user, isMobile }) {
                 />
               </div>
 
-              {/* File picker */}
+              {/* File picker En */}
               <div style={{ flex: 1 }}>
                 <label style={{ display: "block", marginBottom: 6, fontSize: 14, fontWeight: 600, color: colors.textPrimary }}>
-                  Chọn file PDF <span style={{ color: colors.error }}>*</span>
+                  File PDF Tiếng Anh (🇬🇧)
                 </label>
                 <input
-                  id="pdf-file-input"
+                  id="pdf-file-input-en"
                   type="file"
                   accept=".pdf,application/pdf"
-                  onChange={handleFileChange}
+                  onChange={handleFileChangeEn}
                   disabled={uploading}
-                  required
                   style={{
                     width: "100%",
                     padding: "8px 11px",
@@ -483,10 +682,15 @@ export default function DocumentManager({ user, isMobile }) {
               </div>
             </div>
 
-            {/* Selected File Details */}
-            {selectedFile && (
-              <div style={{ fontSize: 13, color: colors.textSecondary }}>
-                File đã chọn: <strong>{selectedFile.name}</strong> ({(selectedFile.size / (1024 * 1024)).toFixed(2)} MB)
+            {/* Selected Files Details */}
+            {(selectedFileVi || selectedFileEn) && (
+              <div style={{ fontSize: 13, color: colors.textSecondary, display: "flex", flexDirection: "column", gap: 4 }}>
+                {selectedFileVi && (
+                  <div>🇻🇳 Tiếng Việt: <strong>{selectedFileVi.name}</strong> ({(selectedFileVi.size / (1024 * 1024)).toFixed(2)} MB)</div>
+                )}
+                {selectedFileEn && (
+                  <div>🇬🇧 English: <strong>{selectedFileEn.name}</strong> ({(selectedFileEn.size / (1024 * 1024)).toFixed(2)} MB)</div>
+                )}
               </div>
             )}
 
@@ -509,7 +713,8 @@ export default function DocumentManager({ user, isMobile }) {
                 onClick={() => {
                   setShowUploadForm(false);
                   setUploadTitle("");
-                  setSelectedFile(null);
+                  setSelectedFileVi(null);
+                  setSelectedFileEn(null);
                 }}
                 disabled={uploading}
                 style={{
@@ -689,9 +894,16 @@ export default function DocumentManager({ user, isMobile }) {
                     flexDirection: "column",
                     gap: 3
                   }}>
-                    <span style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", display: "block" }}>
-                      File: {docItem.fileName}
-                    </span>
+                    {(docItem.fileNameVi || docItem.fileUrlVi || docItem.fileName) && (
+                      <span style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", display: "block" }}>
+                        🇻🇳 Tiếng Việt: {docItem.fileNameVi || docItem.fileName}
+                      </span>
+                    )}
+                    {(docItem.fileNameEn || docItem.fileUrlEn) && (
+                      <span style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", display: "block" }}>
+                        🇬🇧 English: {docItem.fileNameEn}
+                      </span>
+                    )}
                     <span>
                       Đăng bởi: <strong>{docItem.uploadedBy}</strong>
                     </span>
@@ -711,6 +923,42 @@ export default function DocumentManager({ user, isMobile }) {
                 borderTop: `1px solid ${colors.backgroundLight}`,
                 paddingTop: 12
               }}>
+                {/* Edit button (Admin only) */}
+                {isAdmin && (
+                  <button
+                    onClick={() => {
+                      setEditingDoc(docItem);
+                      setEditTitle(docItem.title || "");
+                      setEditFileVi(null);
+                      setEditFileEn(null);
+                    }}
+                    title="Chỉnh sửa tài liệu"
+                    style={{
+                      background: "none",
+                      border: `1.5px solid ${colors.primary}44`,
+                      borderRadius: 8,
+                      width: 36,
+                      height: 36,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: colors.primary,
+                      cursor: "pointer",
+                      transition: "all 0.2s ease"
+                    }}
+                    onMouseOver={(e) => {
+                      e.currentTarget.style.background = colors.primary;
+                      e.currentTarget.style.color = colors.white;
+                    }}
+                    onMouseOut={(e) => {
+                      e.currentTarget.style.background = "none";
+                      e.currentTarget.style.color = colors.primary;
+                    }}
+                  >
+                    <IoCreateOutline fontSize={16} />
+                  </button>
+                )}
+
                 {/* Delete button (Admin only) */}
                 {isAdmin && (
                   <button
@@ -744,10 +992,10 @@ export default function DocumentManager({ user, isMobile }) {
 
                 {/* Download button */}
                 <a
-                  href={docItem.fileUrl}
+                  href={docItem.fileUrlVi || docItem.fileUrl || docItem.fileUrlEn}
                   target="_blank"
                   rel="noopener noreferrer"
-                  download={docItem.fileName}
+                  download={docItem.fileNameVi || docItem.fileName || docItem.fileNameEn}
                   title="Tải về file PDF"
                   style={{
                     background: "none",
@@ -806,11 +1054,185 @@ export default function DocumentManager({ user, isMobile }) {
       {/* PDF View Modal Overlay - Trình xem sách 3D */}
       {viewingDoc && (
         <BookViewer3D
-          fileUrl={viewingDoc.fileUrl}
+          fileUrl={viewingDoc.fileUrlVi || viewingDoc.fileUrl}
+          fileUrlEn={viewingDoc.fileUrlEn}
           title={viewingDoc.title}
           onClose={() => setViewingDoc(null)}
           isMobile={isMobile}
         />
+      )}
+
+      {/* Edit Document Modal Overlay - Admin only */}
+      {isAdmin && editingDoc && (
+        <div style={{
+          position: "fixed",
+          top: 0, left: 0, right: 0, bottom: 0,
+          background: "rgba(0,0,0,0.5)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 9999,
+          padding: 16
+        }}>
+          <div style={{
+            background: "white",
+            padding: 24,
+            borderRadius: 14,
+            width: "100%",
+            maxWidth: 550,
+            boxShadow: "0 10px 25px rgba(0,0,0,0.2)",
+            animation: "fadeIn 0.2s ease"
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, borderBottom: `1px solid ${colors.border}`, paddingBottom: 12 }}>
+              <h3 style={{ margin: 0, color: colors.primaryDark, fontSize: 18, fontWeight: 700 }}>✏️ Chỉnh sửa tài liệu</h3>
+              <button
+                onClick={() => setEditingDoc(null)}
+                style={{ background: "none", border: "none", cursor: "pointer", color: colors.textSecondary, fontSize: 20 }}
+              >
+                <IoCloseOutline />
+              </button>
+            </div>
+
+            <form onSubmit={handleEditSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {/* Tên tài liệu */}
+              <div>
+                <label style={{ display: "block", marginBottom: 6, fontSize: 14, fontWeight: 600, color: colors.textPrimary }}>
+                  Tên tài liệu <span style={{ color: colors.error }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Nhập tiêu đề hoặc tên hiển thị mới..."
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  disabled={editUploading}
+                  required
+                  style={{
+                    width: "100%",
+                    padding: 11,
+                    borderRadius: 8,
+                    border: `1.5px solid ${colors.border}`,
+                    fontSize: 14,
+                    boxSizing: "border-box",
+                    background: colors.white,
+                    outline: "none"
+                  }}
+                />
+              </div>
+
+              {/* PDF Tiếng Việt */}
+              <div>
+                <label style={{ display: "block", marginBottom: 4, fontSize: 14, fontWeight: 600, color: colors.textPrimary }}>
+                  File Tiếng Việt (🇻🇳)
+                </label>
+                <div style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 6 }}>
+                  Hiện tại: {editingDoc.fileNameVi || editingDoc.fileName || "Chưa có file"}
+                </div>
+                <input
+                  id="pdf-edit-input-vi"
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  onChange={(e) => {
+                    const f = e.target.files[0];
+                    if (f && f.type === "application/pdf") setEditFileVi(f);
+                    else if (f) pushToast("Chỉ hỗ trợ tải lên file PDF!", "warning");
+                  }}
+                  disabled={editUploading}
+                  style={{
+                    width: "100%",
+                    padding: "6px 10px",
+                    borderRadius: 8,
+                    border: `1.5px solid ${colors.border}`,
+                    fontSize: 13,
+                    boxSizing: "border-box",
+                    background: colors.white,
+                    outline: "none"
+                  }}
+                />
+              </div>
+
+              {/* PDF Tiếng Anh */}
+              <div>
+                <label style={{ display: "block", marginBottom: 4, fontSize: 14, fontWeight: 600, color: colors.textPrimary }}>
+                  File Tiếng Anh (🇬🇧)
+                </label>
+                <div style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 6 }}>
+                  Hiện tại: {editingDoc.fileNameEn || "Chưa có file"}
+                </div>
+                <input
+                  id="pdf-edit-input-en"
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  onChange={(e) => {
+                    const f = e.target.files[0];
+                    if (f && f.type === "application/pdf") setEditFileEn(f);
+                    else if (f) pushToast("Chỉ hỗ trợ tải lên file PDF!", "warning");
+                  }}
+                  disabled={editUploading}
+                  style={{
+                    width: "100%",
+                    padding: "6px 10px",
+                    borderRadius: 8,
+                    border: `1.5px solid ${colors.border}`,
+                    fontSize: 13,
+                    boxSizing: "border-box",
+                    background: colors.white,
+                    outline: "none"
+                  }}
+                />
+              </div>
+
+              {/* Progress bar */}
+              {editUploading && (
+                <div style={{ width: "100%", background: "#e0e0e0", borderRadius: 4, height: 8, overflow: "hidden" }}>
+                  <div style={{ 
+                    width: `${editProgress}%`, 
+                    background: colors.primary, 
+                    height: "100%", 
+                    transition: "width 0.2s ease" 
+                  }} />
+                </div>
+              )}
+
+              {/* Nút lưu */}
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 8, borderTop: `1px solid ${colors.border}`, paddingTop: 14 }}>
+                <button
+                  type="button"
+                  onClick={() => setEditingDoc(null)}
+                  disabled={editUploading}
+                  style={{
+                    padding: "9px 18px",
+                    borderRadius: 8,
+                    border: `1px solid ${colors.border}`,
+                    background: colors.white,
+                    color: colors.textSecondary,
+                    fontSize: 14,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  disabled={editUploading}
+                  style={{
+                    padding: "9px 24px",
+                    borderRadius: 8,
+                    border: "none",
+                    background: colors.primary,
+                    color: colors.white,
+                    fontSize: 14,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    opacity: editUploading ? 0.7 : 1,
+                  }}
+                >
+                  {editUploading ? "Đang cập nhật..." : "Lưu thay đổi"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -53,7 +53,7 @@ export default function UserManager({ user, isMobile }) {
 
   // Tab API Key Config
   const [aiProvider, setAiProvider] = useState('google');
-  const [aiModel, setAiModel] = useState('gemini-2.0-flash');
+  const [aiModel, setAiModel] = useState('gemini-2.5-flash');
   const [apiKey, setApiKey] = useState('');
   const [systemInstruction, setSystemInstruction] = useState('');
   const [hasSavedKey, setHasSavedKey] = useState(false);
@@ -105,7 +105,16 @@ export default function UserManager({ user, isMobile }) {
       if (docSnap.exists()) {
         const data = docSnap.data();
         setAiProvider(data.provider || 'google');
-        setAiModel(data.model || 'gemini-2.0-flash');
+        
+        // Map old deprecated models to newer ones
+        let loadedModel = data.model || 'gemini-2.5-flash';
+        if (loadedModel === 'gemini-2.0-flash' || loadedModel === 'gemini-1.5-flash') {
+          loadedModel = 'gemini-2.5-flash';
+        } else if (loadedModel === 'gemini-1.5-pro') {
+          loadedModel = 'gemini-2.5-pro';
+        }
+        setAiModel(loadedModel);
+        
         setSystemInstruction(data.systemInstruction || '');
         setTrainedDocs(data.trainedDocs || []);
         if (data.apiKey) {
@@ -117,7 +126,7 @@ export default function UserManager({ user, isMobile }) {
         }
       } else {
         setAiProvider('google');
-        setAiModel('gemini-2.0-flash');
+        setAiModel('gemini-2.5-flash');
         setSystemInstruction('');
         setTrainedDocs([]);
         setApiKey('');
@@ -636,7 +645,7 @@ export default function UserManager({ user, isMobile }) {
               onChange={e => {
                 const prov = e.target.value;
                 setAiProvider(prov);
-                setAiModel(prov === 'google' ? 'gemini-2.0-flash' : 'gpt-4o-mini');
+                setAiModel(prov === 'google' ? 'gemini-2.5-flash' : 'gpt-4o-mini');
               }} 
               style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #ccc', boxSizing: 'border-box', background: 'white' }}
             >
@@ -656,9 +665,8 @@ export default function UserManager({ user, isMobile }) {
             >
               {aiProvider === 'google' ? (
                 <>
-                  <option value="gemini-2.0-flash">Gemini 2.0 Flash (Khuyên dùng)</option>
-                  <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
-                  <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                  <option value="gemini-2.5-flash">Gemini 2.5 Flash (Khuyên dùng)</option>
+                  <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
                 </>
               ) : (
                 <>

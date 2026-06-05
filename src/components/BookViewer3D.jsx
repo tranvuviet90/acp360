@@ -4,7 +4,9 @@ import {
   IoChevronBackOutline, 
   IoChevronForwardOutline, 
   IoDownloadOutline,
-  IoRefreshOutline
+  IoRefreshOutline,
+  IoAddOutline,
+  IoRemoveOutline
 } from "react-icons/io5";
 
 // Cấu hình CDN cho PDF.js
@@ -12,7 +14,15 @@ const PDFJS_DIST = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174";
 const PDFJS_SRC = `${PDFJS_DIST}/pdf.min.js`;
 const PDFJS_WORKER_SRC = `${PDFJS_DIST}/pdf.worker.min.js`;
 
-export default function BookViewer3D({ fileUrl, title, onClose, isMobile }) {
+export default function BookViewer3D({ fileUrl, fileUrlEn, title, onClose, isMobile }) {
+  const [lang, setLang] = useState(fileUrl ? "vi" : "en");
+  const [activeUrl, setActiveUrl] = useState(lang === "vi" ? fileUrl : fileUrlEn);
+  const [zoom, setZoom] = useState(1);
+
+  useEffect(() => {
+    setActiveUrl(lang === "vi" ? (fileUrl || fileUrlEn) : (fileUrlEn || fileUrl));
+  }, [lang, fileUrl, fileUrlEn]);
+
   const [loading, setLoading] = useState(true);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [error, setError] = useState(null);
@@ -36,6 +46,9 @@ export default function BookViewer3D({ fileUrl, title, onClose, isMobile }) {
       try {
         setLoading(true);
         setLoadingProgress(5);
+        setError(null);
+        setPages([]);
+        setCurrentSheet(0);
 
         // Đảm bảo PDF.js được tải động từ CDN
         if (!window.pdfjsLib) {
@@ -114,7 +127,7 @@ export default function BookViewer3D({ fileUrl, title, onClose, isMobile }) {
     return () => {
       active = false;
     };
-  }, [fileUrl, isMobile]);
+  }, [activeUrl, isMobile]);
 
   // 2. Tính toán tỉ lệ co giãn (Responsive Scale)
   useEffect(() => {
@@ -130,8 +143,8 @@ export default function BookViewer3D({ fileUrl, title, onClose, isMobile }) {
       const scaleX = (containerWidth - marginX) / bookWidth;
       const scaleY = (containerHeight - marginY) / pageHeight;
       
-      // Chọn tỉ lệ nhỏ hơn để vừa vặn cả chiều ngang lẫn dọc
-      const finalScale = Math.min(scaleX, scaleY, 1);
+      // Chọn tỉ lệ nhỏ hơn để vừa vặn cả chiều ngang lẫn dọc (không giới hạn tối đa = 1 để tự co giãn to)
+      const finalScale = Math.min(scaleX, scaleY);
       setScale(finalScale);
     };
 
@@ -139,6 +152,28 @@ export default function BookViewer3D({ fileUrl, title, onClose, isMobile }) {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, [pages, bookWidth, pageHeight, isMobile]);
+
+  // Lăn con lăn chuột để phóng to/thu nhỏ
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const onWheel = (e) => {
+      if (loading || error || pages.length === 0) return;
+      e.preventDefault();
+      const zoomStep = 0.08;
+      if (e.deltaY < 0) {
+        setZoom(prev => Math.min(prev + zoomStep, 3.0));
+      } else {
+        setZoom(prev => Math.max(prev - zoomStep, 0.4));
+      }
+    };
+
+    container.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      container.removeEventListener("wheel", onWheel);
+    };
+  }, [pages, loading, error]);
 
   // Điều hướng lật trang
   const totalSheets = pages.length / 2;
@@ -222,8 +257,52 @@ export default function BookViewer3D({ fileUrl, title, onClose, isMobile }) {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+          {/* Bộ chọn ngôn ngữ */}
+          {(fileUrl && fileUrlEn) && (
+            <div style={{
+              display: "flex",
+              background: "rgba(255, 255, 255, 0.15)",
+              borderRadius: 8,
+              padding: 2,
+              marginRight: 8
+            }}>
+              <button
+                onClick={() => setLang("vi")}
+                style={{
+                  background: lang === "vi" ? primaryColor : "transparent",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 6,
+                  padding: "6px 12px",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  transition: "background 0.2s"
+                }}
+              >
+                🇻🇳 Tiếng Việt
+              </button>
+              <button
+                onClick={() => setLang("en")}
+                style={{
+                  background: lang === "en" ? primaryColor : "transparent",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 6,
+                  padding: "6px 12px",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  transition: "background 0.2s"
+                }}
+              >
+                🇬🇧 English
+              </button>
+            </div>
+          )}
+
           <a
-            href={fileUrl}
+            href={activeUrl}
             target="_blank"
             rel="noopener noreferrer"
             download
@@ -277,7 +356,7 @@ export default function BookViewer3D({ fileUrl, title, onClose, isMobile }) {
           justifyContent: "center",
           alignItems: "center",
           position: "relative",
-          overflow: "hidden",
+          overflow: "auto", // Cho phép hiện thanh cuộn khi zoom to
           padding: "20px"
         }}
       >
@@ -297,7 +376,7 @@ export default function BookViewer3D({ fileUrl, title, onClose, isMobile }) {
             gap: 16
           }}>
             <IoRefreshOutline className="spin" style={{ fontSize: 44, color: primaryLight, animation: "spin 2s linear infinite" }} />
-            <div style={{ fontSize: 16, fontWeight: 600 }}>Đang chuẩn bị trang sách 3D...</div>
+            <div style={{ fontSize: 16, fontWeight: 600 }}>Đang chuẩn bị tài liệu...</div>
             <div style={{ width: 200, background: "rgba(255,255,255,0.1)", borderRadius: 10, height: 6, overflow: "hidden" }}>
               <div style={{ width: `${loadingProgress}%`, background: primaryLight, height: "100%", transition: "width 0.1s ease" }} />
             </div>
@@ -345,15 +424,25 @@ export default function BookViewer3D({ fileUrl, title, onClose, isMobile }) {
         {/* Cấu trúc sách 3D */}
         {!loading && !error && pages.length > 0 && (
           <div style={{
-            transform: `scale(${scale})`,
-            transformOrigin: "center center",
-            width: bookWidth,
-            height: pageHeight,
-            transition: "transform 0.3s ease",
+            width: bookWidth * scale * zoom,
+            height: pageHeight * scale * zoom,
             display: "flex",
             justifyContent: "center",
-            alignItems: "center"
+            alignItems: "center",
+            flexShrink: 0,
+            transition: "width 0.15s ease, height 0.15s ease"
           }}>
+            <div style={{
+              transform: `scale(${scale * zoom})`,
+              transformOrigin: "center center",
+              width: bookWidth,
+              height: pageHeight,
+              transition: "transform 0.15s ease",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              flexShrink: 0
+            }}>
             {/* Vỏ bìa sách cứng 3D (Book Cover Backdrop) */}
             <div style={{
               position: "absolute",
@@ -501,6 +590,7 @@ export default function BookViewer3D({ fileUrl, title, onClose, isMobile }) {
               zIndex: 10,
               boxShadow: "0 0 10px rgba(0,0,0,0.5)"
             }} />
+            </div>
           </div>
         )}
       </div>
@@ -519,70 +609,148 @@ export default function BookViewer3D({ fileUrl, title, onClose, isMobile }) {
           color: "#fff",
           zIndex: 10
         }}>
-          {/* Nút bấm điều hướng */}
-          <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-            <button
-              onClick={prevSheet}
-              disabled={currentSheet === 0}
-              style={{
-                background: "rgba(255,255,255,0.1)",
-                color: "#fff",
-                border: "none",
-                borderRadius: 8,
-                padding: "8px 16px",
-                cursor: currentSheet === 0 ? "not-allowed" : "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                fontWeight: 600,
-                fontSize: 14,
-                opacity: currentSheet === 0 ? 0.4 : 1,
-                transition: "background 0.2s"
-              }}
-              onMouseOver={(e) => { if (currentSheet > 0) e.currentTarget.style.background = "rgba(255,255,255,0.2)"; }}
-              onMouseOut={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.1)"; }}
-            >
-              <IoChevronBackOutline fontSize={16} /> Trang trước
-            </button>
+          {/* Nút bấm điều hướng và Phóng to/Thu nhỏ */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", maxWidth: 800, flexWrap: "wrap", gap: 16 }}>
+            
+            {/* Bộ điều khiển Zoom */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <button
+                onClick={() => setZoom(prev => Math.max(prev - 0.1, 0.4))}
+                title="Thu nhỏ"
+                style={{
+                  background: "rgba(255,255,255,0.1)",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 8,
+                  width: 36,
+                  height: 36,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  transition: "background 0.2s"
+                }}
+                onMouseOver={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.2)"}
+                onMouseOut={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.1)"}
+              >
+                <IoRemoveOutline fontSize={18} />
+              </button>
+              
+              <span style={{ fontSize: 13, minWidth: 45, textAlign: "center", fontWeight: 600 }}>
+                {Math.round(zoom * 100)}%
+              </span>
 
-            {/* Chỉ báo số trang */}
-            <span style={{ fontSize: 15, fontWeight: 700, minWidth: 100, textAlign: "center" }}>
-              {currentSheet === 0 ? (
-                <span>Trang bìa</span>
-              ) : currentSheet === totalSheets ? (
-                <span>Trang cuối</span>
-              ) : (
-                <span>Trang {currentSheet * 2} - {currentSheet * 2 + 1} / {pages.length}</span>
-              )}
-            </span>
+              <button
+                onClick={() => setZoom(prev => Math.min(prev + 0.1, 3.0))}
+                title="Phóng to"
+                style={{
+                  background: "rgba(255,255,255,0.1)",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 8,
+                  width: 36,
+                  height: 36,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  transition: "background 0.2s"
+                }}
+                onMouseOver={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.2)"}
+                onMouseOut={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.1)"}
+              >
+                <IoAddOutline fontSize={18} />
+              </button>
+              
+              <button
+                onClick={() => setZoom(1)}
+                title="Đặt lại"
+                style={{
+                  background: "rgba(255,255,255,0.1)",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "0 10px",
+                  height: 36,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  transition: "background 0.2s"
+                }}
+                onMouseOver={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.2)"}
+                onMouseOut={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.1)"}
+              >
+                Đặt lại
+              </button>
+            </div>
 
-            <button
-              onClick={nextSheet}
-              disabled={currentSheet === totalSheets}
-              style={{
-                background: "rgba(255,255,255,0.1)",
-                color: "#fff",
-                border: "none",
-                borderRadius: 8,
-                padding: "8px 16px",
-                cursor: currentSheet === totalSheets ? "not-allowed" : "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                fontWeight: 600,
-                fontSize: 14,
-                opacity: currentSheet === totalSheets ? 0.4 : 1,
-                transition: "background 0.2s"
-              }}
-              onMouseOver={(e) => { if (currentSheet < totalSheets) e.currentTarget.style.background = "rgba(255,255,255,0.2)"; }}
-              onMouseOut={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.1)"; }}
-            >
-              Trang sau <IoChevronForwardOutline fontSize={16} />
-            </button>
+            {/* Điều hướng trang */}
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <button
+                onClick={prevSheet}
+                disabled={currentSheet === 0}
+                style={{
+                  background: "rgba(255,255,255,0.1)",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "8px 16px",
+                  cursor: currentSheet === 0 ? "not-allowed" : "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  fontWeight: 600,
+                  fontSize: 14,
+                  opacity: currentSheet === 0 ? 0.4 : 1,
+                  transition: "background 0.2s"
+                }}
+                onMouseOver={(e) => { if (currentSheet > 0) e.currentTarget.style.background = "rgba(255,255,255,0.2)"; }}
+                onMouseOut={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.1)"; }}
+              >
+                <IoChevronBackOutline fontSize={16} /> Trang trước
+              </button>
+
+              <span style={{ fontSize: 15, fontWeight: 700, minWidth: 100, textAlign: "center" }}>
+                {currentSheet === 0 ? (
+                  <span>Trang bìa</span>
+                ) : currentSheet === totalSheets ? (
+                  <span>Trang cuối</span>
+                ) : (
+                  <span>Trang {currentSheet * 2} - {currentSheet * 2 + 1} / {pages.length}</span>
+                )}
+              </span>
+
+              <button
+                onClick={nextSheet}
+                disabled={currentSheet === totalSheets}
+                style={{
+                  background: "rgba(255,255,255,0.1)",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "8px 16px",
+                  cursor: currentSheet === totalSheets ? "not-allowed" : "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  fontWeight: 600,
+                  fontSize: 14,
+                  opacity: currentSheet === totalSheets ? 0.4 : 1,
+                  transition: "background 0.2s"
+                }}
+                onMouseOver={(e) => { if (currentSheet < totalSheets) e.currentTarget.style.background = "rgba(255,255,255,0.2)"; }}
+                onMouseOut={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.1)"; }}
+              >
+                Trang sau <IoChevronForwardOutline fontSize={16} />
+              </button>
+            </div>
           </div>
           
-          <div style={{ fontSize: 12, color: "#9ca3af" }}>
-            * Mẹo: Bạn có thể nhấn phím mũi tên Trái (←) / Phải (→) trên bàn phím hoặc click trực tiếp vào mép sách để lật trang nhanh.
+          <div style={{ fontSize: 12, color: "#9ca3af", textAlign: "center" }}>
+            * Mẹo: Nhấn phím mũi tên Trái (←) / Phải (→) để lật trang. Lăn chuột hoặc bấm kính lúp để phóng to/thu nhỏ.
           </div>
         </div>
       )}
