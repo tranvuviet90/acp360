@@ -7,6 +7,9 @@ import { callAIService } from '../utils/aiAdapter';
 import { db } from "../firebase";
 import { collection, onSnapshot } from "firebase/firestore";
 
+const stripDiacritics = (s = "") => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+const normalizeRole = (r) => stripDiacritics(String(r || "").trim()).toLowerCase();
+
 function Chatbot({ user }) {
     const { t } = useI18n();
     // 2. Thêm state để quản lý trạng thái đóng/mở
@@ -21,6 +24,18 @@ function Chatbot({ user }) {
     const [allDocs, setAllDocs] = useState([]);
 
     useEffect(() => {
+        if (!user) {
+            setAllDocs([]);
+            return;
+        }
+        const userRole = normalizeRole(user.role);
+        const hasDocAccess = ["admin", "ehs", "ehs committee", "trainer", "manager"].includes(userRole);
+        
+        if (!hasDocAccess) {
+            setAllDocs([]);
+            return;
+        }
+
         const unsubscribe = onSnapshot(collection(db, "documents"), (snapshot) => {
             const docsList = snapshot.docs.map((docSnap) => ({
                 id: docSnap.id,
@@ -31,7 +46,7 @@ function Chatbot({ user }) {
             console.error("Lỗi khi tải danh sách tài liệu cho chatbot:", error);
         });
         return () => unsubscribe();
-    }, []);
+    }, [user]);
 
     // Tự động cuộn xuống khi có tin nhắn mới
     useEffect(() => {
@@ -42,8 +57,7 @@ function Chatbot({ user }) {
 
     const CLOUD_FUNCTION_URL = 'https://askai-zvblqnzylq-as.a.run.app';
 
-    const stripDiacritics = (s = "") => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    const normalizeRole = (r) => stripDiacritics(String(r || "").trim()).toLowerCase();
+
 
     const getDocAccess = (docItem, currentUser) => {
         const userRole = normalizeRole(currentUser?.role || "");
