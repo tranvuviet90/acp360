@@ -317,7 +317,7 @@ export default function App() {
           SafeOne © {new Date().getFullYear()} | Created by Viet Tran
         </div>
 
-        <Chatbot />
+        <Chatbot user={user} />
       </div>
       </ConfirmProvider>
     </ToastProvider>

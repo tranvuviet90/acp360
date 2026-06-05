@@ -9,7 +9,7 @@ import { doc, getDoc } from 'firebase/firestore';
  * @param {string} fallbackUrl 
  * @returns {Promise<{response: string}>}
  */
-export async function callAIService(prompt, history = [], fallbackUrl) {
+export async function callAIService(prompt, history = [], fallbackUrl, additionalContext = "") {
   try {
     // 1. Lấy cấu hình AI từ Firestore
     const docRef = doc(db, "settings", "ai_config");
@@ -31,6 +31,9 @@ export async function callAIService(prompt, history = [], fallbackUrl) {
         "  * Đồng thời, hãy gợi ý thêm rằng trong thời gian chờ đợi phản hồi trực tiếp từ bộ phận EHS, bạn (với vai trò chatbot hỗ trợ) vẫn có thể cung cấp cho họ một số thông tin tham khảo nhanh dựa trên cơ sở dữ liệu AI tổng hợp của mình.";
 
       let fullSystemInstruction = systemInstruction && systemInstruction.trim() !== "" ? systemInstruction : DEFAULT_SYSTEM_INSTRUCTION;
+      if (additionalContext) {
+        fullSystemInstruction += "\n\n" + additionalContext;
+      }
       if (Array.isArray(trainedDocs) && trainedDocs.length > 0) {
         fullSystemInstruction += "\n\n=== TÀI LIỆU HUẤN LUYỆN KHÁCH HÀNG / KNOWLEDGE BASE ===\n";
         trainedDocs.forEach(d => {
@@ -160,7 +163,10 @@ export async function callAIService(prompt, history = [], fallbackUrl) {
   const response = await fetch(fallbackUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt, history: standardHistory }),
+    body: JSON.stringify({
+      prompt: additionalContext ? `${additionalContext}\n\nUser Prompt: ${prompt}` : prompt,
+      history: standardHistory
+    }),
   });
 
   if (!response.ok) {
