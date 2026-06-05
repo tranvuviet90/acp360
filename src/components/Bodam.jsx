@@ -95,8 +95,15 @@ function BoDam({ user, isMobile }) {
   async function handleAssign(idx, targetUserId, targetUserName) {
     const newStatus = [...status];
     while (newStatus.length <= idx) newStatus.push({ checked: false, name: "", unavailable: false });
-    const cur = newStatus[idx];
-    newStatus[idx] = { ...cur, assignedTo: { uid: targetUserId, name: targetUserName } };
+    const cur = { ...newStatus[idx] };
+    const currentAssigned = Array.isArray(cur.assignedTo) ? cur.assignedTo : (cur.assignedTo ? [cur.assignedTo] : []);
+    
+    // Kiểm tra trùng lặp và giới hạn 4 người
+    if (currentAssigned.some(u => u.uid === targetUserId)) return;
+    if (currentAssigned.length >= 4) return;
+    
+    const updatedAssigned = [...currentAssigned, { uid: targetUserId, name: targetUserName }];
+    newStatus[idx] = { ...cur, assignedTo: updatedAssigned };
     await setDoc(doc(db, "bodam", "status"), { status: newStatus });
     try {
       await addDoc(collection(db, "notifications"), {
@@ -111,28 +118,29 @@ function BoDam({ user, isMobile }) {
     } catch (e) { console.error(e); }
   }
 
-  async function handleCancelAssign(idx) {
-    if (!(await askConfirm("Bạn có chắc muốn hủy chỉ định này không?", "Hủy chỉ định bộ đàm"))) return;
-    const assignedUser = getItem(idx).assignedTo;
+  async function handleCancelAssign(idx, targetUserId) {
+    if (!(await askConfirm("Bạn có chắc muốn hủy chỉ định cho người dùng này không?", "Hủy chỉ định bộ đàm"))) return;
     const newStatus = [...status];
     while (newStatus.length <= idx) newStatus.push({ checked: false, name: "", unavailable: false });
-    newStatus[idx] = { ...newStatus[idx], assignedTo: null };
+    const cur = { ...newStatus[idx] };
+    const currentAssigned = Array.isArray(cur.assignedTo) ? cur.assignedTo : (cur.assignedTo ? [cur.assignedTo] : []);
+    const updatedAssigned = currentAssigned.filter(u => u.uid !== targetUserId);
+    
+    newStatus[idx] = { ...cur, assignedTo: updatedAssigned.length > 0 ? updatedAssigned : null };
     await setDoc(doc(db, "bodam", "status"), { status: newStatus });
-    if (assignedUser) {
-      try {
-        const q = query(collection(db, "notifications"), where("relatedId", "==", `bodam-${idx}-${assignedUser.uid}`));
-        const snap = await getDocs(q);
-        const batch = writeBatch(db);
-        snap.forEach(d => batch.delete(d.ref));
-        await batch.commit();
-      } catch (err) { console.error("Lỗi xóa thông báo chỉ định:", err); }
-    }
+    try {
+      const q = query(collection(db, "notifications"), where("relatedId", "==", `bodam-${idx}-${targetUserId}`));
+      const snap = await getDocs(q);
+      const batch = writeBatch(db);
+      snap.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+    } catch (err) { console.error("Lỗi xóa thông báo chỉ định:", err); }
   }
 
   async function handleAccept(idx) {
     const newStatus = [...status];
     while (newStatus.length <= idx) newStatus.push({ checked: false, name: "", unavailable: false });
-    newStatus[idx] = { ...newStatus[idx], checked: true, name: user.name, assignedTo: null };
+    newStatus[idx] = { ...newStatus[idx], checked: true, name: user.name };
     await setDoc(doc(db, "bodam", "status"), { status: newStatus });
     try {
       const q = query(collection(db, "notifications"), where("relatedId", "==", `bodam-${idx}-${user.uid}`));
@@ -192,31 +200,39 @@ function BoDam({ user, isMobile }) {
         <div>
           {indices.map((idx) => {
             const item = getItem(idx);
+            const assignedList = Array.isArray(item.assignedTo) ? item.assignedTo : (item.assignedTo ? [item.assignedTo] : []);
+            const isUserAssigned = assignedList.some(u => u.uid === user.uid);
+            const canCheck = !item.unavailable && (assignedList.length === 0 || isUserAssigned);
             return (
               <div key={idx} style={{ background: idx % 2 ? "#F4FAF9" : "#fff", opacity: item.unavailable ? 0.5 : 1, padding: '15px', border: `1.2px solid ${orangeLight}`, borderRadius: 12, marginBottom: 10, boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
                 <div style={{ fontWeight: 600, color: dark, fontSize: 18, marginBottom: 12 }}>{getBodamName(idx)}</div>
                 <div style={{ marginBottom: 12 }}>
-                  <label style={{ display: 'flex', alignItems: 'center', cursor: (item.unavailable || item.assignedTo) ? 'not-allowed' : 'pointer' }}>
-                    <input type="checkbox" checked={item.checked || false} disabled={item.unavailable || item.assignedTo} style={{ width: 22, height: 22, accentColor: orange, marginRight: 14 }} onChange={() => handleCheck(idx)} />
+                  <label style={{ display: 'flex', alignItems: 'center', cursor: (!canCheck) ? 'not-allowed' : 'pointer' }}>
+                    <input type="checkbox" checked={item.checked || false} disabled={!canCheck} style={{ width: 22, height: 22, accentColor: orange, marginRight: 14 }} onChange={() => handleCheck(idx)} />
                     <div>
                       {item.unavailable ? (
                         <span style={{ color: red, fontWeight: 700 }}>{t("bodam.unavailable")}</span>
-                      ) : item.assignedTo ? (
-                        <span style={{ color: "#d9534f", fontWeight: 700 }}>Đã chỉ định cho {item.assignedTo.name} - Chờ xác nhận</span>
                       ) : item.checked ? (
                         <span style={{ color: orange, fontWeight: 700 }}>{item.name} — {t("bodam.inuse")}</span>
+                      ) : assignedList.length > 0 ? (
+                        <span style={{ color: "#d9534f", fontWeight: 700 }}>
+                          Chỉ định: {assignedList.map(u => u.name).join(", ")}
+                        </span>
                       ) : (
                         <span style={{ color: "#b0b0b0", fontWeight: 600 }}>{t("bodam.returned")}</span>
                       )}
                     </div>
                   </label>
                 </div>
+                {!item.checked && isUserAssigned && (
+                  <button onClick={() => handleAccept(idx)} style={{ background: '#4caf50', color: 'white', border: 'none', padding: '8px 14px', borderRadius: 6, fontWeight: 600, cursor: 'pointer', width: '100%', marginBottom: '8px' }}>Chấp nhận sử dụng</button>
+                )}
                 {isAdmin && (
                   <>
                     <button onClick={() => handleToggleUnavailable(idx)} style={{ background: item.unavailable ? '#f0ad4e' : '#6c757d', color: 'white', border: 'none', padding: '8px 14px', borderRadius: 6, fontWeight: 600, cursor: 'pointer', width: '100%', marginTop: '8px' }}>
                       {item.unavailable ? t("bodam.reopen") : t("bodam.disable")}
                     </button>
-                    {!item.unavailable && !item.checked && !item.assignedTo && (
+                    {!item.unavailable && assignedList.length < 4 && (
                       <select style={{ marginTop: 8, padding: 8, borderRadius: 6, width: '100%', border: `1px solid ${orangeLight}` }} onChange={(e) => {
                         if (e.target.value) {
                           const sel = committeeUsers.find(u => u.uid === e.target.value);
@@ -224,19 +240,24 @@ function BoDam({ user, isMobile }) {
                           e.target.value = "";
                         }
                       }}>
-                        <option value="">Chỉ định người dùng...</option>
-                        {committeeUsers.map(u => <option key={u.uid} value={u.uid}>{u.name}</option>)}
+                        <option value="">Chỉ định người dùng (Tối đa 4)...</option>
+                        {committeeUsers
+                          .filter(u => !assignedList.some(al => al.uid === u.uid))
+                          .map(u => <option key={u.uid} value={u.uid}>{u.name}</option>)}
                       </select>
                     )}
-                    {item.assignedTo && (
-                      <button onClick={() => handleCancelAssign(idx)} style={{ background: '#d9534f', color: 'white', border: 'none', padding: '8px 14px', borderRadius: 6, fontWeight: 600, cursor: 'pointer', width: '100%', marginTop: '8px' }}>
-                        Hủy chỉ định
-                      </button>
+                    {assignedList.length > 0 && (
+                      <div style={{ marginTop: 8 }}>
+                        <div style={{ fontSize: 13, fontWeight: 'bold', marginBottom: 4 }}>Danh sách chỉ định:</div>
+                        {assignedList.map(u => (
+                          <div key={u.uid} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f1f1f1', padding: '4px 8px', borderRadius: 4, marginBottom: 4, fontSize: 13 }}>
+                            <span>{u.name}</span>
+                            <button onClick={() => handleCancelAssign(idx, u.uid)} style={{ background: 'none', border: 'none', color: red, cursor: 'pointer', fontWeight: 'bold' }}>✕</button>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </>
-                )}
-                {item.assignedTo?.uid === user.uid && (
-                  <button onClick={() => handleAccept(idx)} style={{ background: '#4caf50', color: 'white', border: 'none', padding: '8px 14px', borderRadius: 6, fontWeight: 600, cursor: 'pointer', width: '100%', marginTop: '8px' }}>Chấp nhận sử dụng</button>
                 )}
               </div>
             );
@@ -256,22 +277,27 @@ function BoDam({ user, isMobile }) {
           <tbody>
             {indices.map((idx) => {
               const item = getItem(idx);
+              const assignedList = Array.isArray(item.assignedTo) ? item.assignedTo : (item.assignedTo ? [item.assignedTo] : []);
+              const isUserAssigned = assignedList.some(u => u.uid === user.uid);
+              const canCheck = !item.unavailable && (assignedList.length === 0 || isUserAssigned);
               return (
                 <tr key={idx} style={{ background: idx % 2 ? "#F4FAF9" : "#fff", opacity: item.unavailable ? 0.5 : 1 }}>
                   <td style={{ padding: "15px 22px", fontWeight: 600, color: dark }}>{getBodamName(idx)}</td>
                   <td style={{ padding: "15px 22px" }}>
-                    <input type="checkbox" checked={item.checked || false} disabled={item.unavailable || item.assignedTo} style={{ width: 22, height: 22, accentColor: orange, marginRight: 14, cursor: (item.unavailable || item.assignedTo) ? 'not-allowed' : 'pointer', verticalAlign: 'middle' }} onChange={() => handleCheck(idx)} />
+                    <input type="checkbox" checked={item.checked || false} disabled={!canCheck} style={{ width: 22, height: 22, accentColor: orange, marginRight: 14, cursor: (!canCheck) ? 'not-allowed' : 'pointer', verticalAlign: 'middle' }} onChange={() => handleCheck(idx)} />
                     {item.unavailable ? (
                       <span style={{ color: red, fontWeight: 700 }}>{t("bodam.unavailable")}</span>
-                    ) : item.assignedTo ? (
+                    ) : item.checked ? (
+                      <span style={{ color: orange, fontWeight: 700 }}>{item.name} — {t("bodam.inuse")}</span>
+                    ) : assignedList.length > 0 ? (
                       <>
-                        <span style={{ color: "#d9534f", fontWeight: 700, marginRight: 10 }}>Đã chỉ định cho {item.assignedTo.name} - Chờ xác nhận</span>
-                        {item.assignedTo.uid === user.uid && (
+                        <span style={{ color: "#d9534f", fontWeight: 700, marginRight: 10 }}>
+                          Chỉ định: {assignedList.map(u => u.name).join(", ")}
+                        </span>
+                        {!item.checked && isUserAssigned && (
                           <button onClick={() => handleAccept(idx)} style={{ background: '#4caf50', color: 'white', border: 'none', padding: '4px 10px', borderRadius: 4, cursor: 'pointer', fontWeight: 'bold' }}>Chấp nhận</button>
                         )}
                       </>
-                    ) : item.checked ? (
-                      <span style={{ color: orange, fontWeight: 700 }}>{item.name} — {t("bodam.inuse")}</span>
                     ) : (
                       <span style={{ color: "#b0b0b0", fontWeight: 600 }}>{t("bodam.returned")}</span>
                     )}
@@ -281,22 +307,29 @@ function BoDam({ user, isMobile }) {
                       <button onClick={() => handleToggleUnavailable(idx)} style={{ background: item.unavailable ? '#f0ad4e' : '#6c757d', color: 'white', border: 'none', padding: '6px 12px', borderRadius: 6, fontWeight: 600, cursor: 'pointer', marginRight: 8 }}>
                         {item.unavailable ? t("bodam.reopen") : t("bodam.markUnavailable")}
                       </button>
-                      {!item.unavailable && !item.checked && !item.assignedTo && (
-                        <select style={{ padding: 6, borderRadius: 6, border: `1px solid ${orangeLight}` }} onChange={(e) => {
+                      {!item.unavailable && assignedList.length < 4 && (
+                        <select style={{ padding: 6, borderRadius: 6, border: `1px solid ${orangeLight}`, marginRight: 8 }} onChange={(e) => {
                           if (e.target.value) {
                             const sel = committeeUsers.find(u => u.uid === e.target.value);
                             handleAssign(idx, sel.uid, sel.name);
                             e.target.value = "";
                           }
                         }}>
-                          <option value="">Chỉ định người dùng...</option>
-                          {committeeUsers.map(u => <option key={u.uid} value={u.uid}>{u.name}</option>)}
+                          <option value="">Chỉ định người dùng (Tối đa 4)...</option>
+                          {committeeUsers
+                            .filter(u => !assignedList.some(al => al.uid === u.uid))
+                            .map(u => <option key={u.uid} value={u.uid}>{u.name}</option>)}
                         </select>
                       )}
-                      {item.assignedTo && (
-                        <button onClick={() => handleCancelAssign(idx)} style={{ background: '#d9534f', color: 'white', border: 'none', padding: '6px 12px', borderRadius: 6, fontWeight: 600, cursor: 'pointer', marginRight: 8 }}>
-                          Hủy chỉ định
-                        </button>
+                      {assignedList.length > 0 && (
+                        <div style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                          {assignedList.map(u => (
+                            <span key={u.uid} style={{ display: 'inline-flex', alignItems: 'center', background: '#f1f1f1', padding: '4px 8px', borderRadius: 4, marginRight: 6, fontSize: 13 }}>
+                              <span style={{ marginRight: 6 }}>{u.name}</span>
+                              <button onClick={() => handleCancelAssign(idx, u.uid)} style={{ background: 'none', border: 'none', color: red, cursor: 'pointer', fontWeight: 'bold', padding: 0 }}>✕</button>
+                            </span>
+                          ))}
+                        </div>
                       )}
                     </td>
                   )}
