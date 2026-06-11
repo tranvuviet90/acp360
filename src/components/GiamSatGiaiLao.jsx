@@ -48,7 +48,9 @@ function GiamSatGiaiLao({ user }) {
   const [viewer, setViewer] = useState({ open:false, list:[], index:0 });
   const [visiblePosts, setVisiblePosts] = useState(2);
   const fileRef = useRef();
-  const userRole = user?.role?.toLowerCase() || '';
+  const userRolesList = user?.role ? (Array.isArray(user.role) ? user.role.map(r => String(r).toLowerCase()) : String(user.role).split(',').map(r => r.trim().toLowerCase())) : [];
+  const isAdminOrEhs = userRolesList.some(r => r === 'admin' || r === 'ehs');
+  const userRole = isAdminOrEhs ? 'admin' : (userRolesList[0] || '');
 
   useEffect(() => {
     const q = query(collection(db, "gialaokv"), orderBy("timestamp", "desc"));

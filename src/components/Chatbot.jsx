@@ -7,8 +7,8 @@ import { callAIService } from '../utils/aiAdapter';
 import { db } from "../firebase";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 
-const stripDiacritics = (s = "") => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-const normalizeRole = (r) => stripDiacritics(String(r || "").trim()).toLowerCase();
+import { normalizeRole } from '../utils/string';
+import { parseMarkdown } from '../utils/markdown';
 
 function Chatbot({ user }) {
     const { t } = useI18n();
@@ -30,9 +30,9 @@ function Chatbot({ user }) {
             setMsdsDocs([]);
             return;
         }
-        const userRole = normalizeRole(user.role);
-        const canViewMSDS = ["admin", "ehs", "manager"].includes(userRole);
-        const canViewSOP = ["admin", "ehs", "ehs committee", "trainer", "manager"].includes(userRole);
+        const userRoles = user?.role ? (Array.isArray(user.role) ? user.role.map(normalizeRole) : String(user.role).split(',').map(normalizeRole)) : [];
+        const canViewMSDS = userRoles.some(r => ["admin", "ehs", "manager"].includes(r));
+        const canViewSOP = userRoles.some(r => ["admin", "ehs", "ehs committee", "trainer", "manager"].includes(r));
 
         let unsubSOP = null;
         let unsubMSDS = null;
@@ -80,14 +80,14 @@ function Chatbot({ user }) {
         }
     }, [messages]);
 
-    const CLOUD_FUNCTION_URL = 'https://askai-zvblqnzylq-as.a.run.app';
+    const CLOUD_FUNCTION_URL = import.meta.env.VITE_ASKAI_URL || 'https://askai-zvblqnzylq-as.a.run.app';
 
 
 
     const getDocAccess = (docItem, currentUser) => {
-        const userRole = normalizeRole(currentUser?.role || "");
-        const canView = ["admin", "ehs", "ehs committee", "trainer", "manager"].includes(userRole);
-        const canViewMSDS = ["admin", "ehs", "manager"].includes(userRole);
+        const userRoles = currentUser?.role ? (Array.isArray(currentUser.role) ? currentUser.role.map(normalizeRole) : String(currentUser.role).split(',').map(normalizeRole)) : [];
+        const canView = userRoles.some(r => ["admin", "ehs", "ehs committee", "trainer", "manager"].includes(r));
+        const canViewMSDS = userRoles.some(r => ["admin", "ehs", "manager"].includes(r));
 
         if (!canView) {
             return { hasAccess: false, reason: "Tài khoản của bạn không có quyền truy cập hệ thống tài liệu. Yêu cầu các vai trò như Admin, EHS, EHS Committee, Trainer hoặc Manager." };
@@ -183,7 +183,9 @@ NGUYÊN TẮC QUAN TRỌNG KHI CUNG CẤP TÀI LIỆU:
                     </div>
                     <div id="chat-body" ref={chatBodyRef}>
                         {messages.map((msg, index) => (
-                            <div key={index} className={`message ${msg.type}`}>{msg.text}</div>
+                            <div key={index} className={`message ${msg.type}`}>
+                                {msg.type === 'ai' ? parseMarkdown(msg.text) : msg.text}
+                            </div>
                         ))}
                         {isLoading && <div className="message loading"><span></span><span></span><span></span></div>}
                     </div>

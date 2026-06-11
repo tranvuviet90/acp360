@@ -16,10 +16,7 @@ import {
   IoCreateOutline
 } from "react-icons/io5";
 import BookViewer3D from "./BookViewer3D";
-
-// Helper normalization functions for roles
-const stripDiacritics = (s = "") => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-const normalizeRole = (r) => stripDiacritics(String(r || "").trim()).toLowerCase();
+import { normalizeRole } from "../utils/string";
 
 export default function DocumentManager({ user, isMobile }) {
   const { pushToast } = useToast();
@@ -51,10 +48,10 @@ export default function DocumentManager({ user, isMobile }) {
   const [viewingDoc, setViewingDoc] = useState(null);
 
   // Roles verification
-  const userRole = normalizeRole(user?.role || "");
-  const isAdmin = userRole === "admin";
-  const canView = ["admin", "ehs", "ehs committee", "trainer", "manager"].includes(userRole);
-  const canViewMSDS = ["admin", "ehs", "manager"].includes(userRole);
+  const userRoles = user?.role ? (Array.isArray(user.role) ? user.role.map(normalizeRole) : String(user.role).split(',').map(normalizeRole)) : [];
+  const isAdmin = userRoles.includes("admin");
+  const canView = userRoles.some(r => ["admin", "ehs", "ehs committee", "trainer", "manager"].includes(r));
+  const canViewMSDS = userRoles.some(r => ["admin", "ehs", "manager"].includes(r));
 
   // Fetch documents real-time
   useEffect(() => {

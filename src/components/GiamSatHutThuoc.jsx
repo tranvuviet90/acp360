@@ -55,7 +55,9 @@ function GiamSatHutThuoc({ user }) {
   const [committeeUsers, setCommitteeUsers] = useState([]);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
-  const userRole = user?.role?.toLowerCase() || '';
+  const userRolesList = user?.role ? (Array.isArray(user.role) ? user.role.map(r => String(r).toLowerCase()) : String(user.role).split(',').map(r => r.trim().toLowerCase())) : [];
+  const isAdminOrEhs = userRolesList.some(r => r === 'admin' || r === 'ehs');
+  const userRole = isAdminOrEhs ? 'admin' : (userRolesList[0] || '');
 
   useEffect(() => {
     const fetchCommitteeUsers = async () => {

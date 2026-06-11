@@ -3,13 +3,8 @@ import { collection, query, where, onSnapshot, doc, updateDoc, arrayUnion, write
 import { db } from "../firebase";
 import { colors } from "../theme";
 import { useToast } from "./LightboxSwipeOnly";
-
-const DEPARTMENTS = [
-  "G_Cutting","G_Rolling","G_Finishing","G_Dipping","G_Buffing","G_Graphics",
-  "G_QC","A_QC","QC_Management","Kayak","A_Rolling","A_Cosmetics","Planning",
-  "Kho VW","WH_SK","WH_FG","WH_EM","WH_AG","Apple","MTN","Paint Blending",
-  "Engineering","MFG","Bảo Vệ","Tạp Vụ","Office"
-];
+import { DEPARTMENT_ROLES } from "../constants/roles";
+import { getWeekNumber, formatRelativeTime } from "../utils/string";
 
 const NOTIFICATION_TYPES_CONFIG = [
   {
@@ -22,7 +17,7 @@ const NOTIFICATION_TYPES_CONFIG = [
     type: "new_tu_gemba_error",
     label: "💡 Báo cáo Tự Gemba",
     desc: "Nhận thông báo khi có báo cáo Tự Gemba mới được ghi nhận.",
-    roles: ["admin", "ehs", ...DEPARTMENTS]
+    roles: ["admin", "ehs", ...DEPARTMENT_ROLES]
   },
   {
     type: "bodam_assign",
@@ -46,33 +41,9 @@ const NOTIFICATION_TYPES_CONFIG = [
     type: "meal_registration",
     label: "🍽️ Báo cơm & Suất ăn",
     desc: "Nhận thông báo khi có thay đổi, điều chỉnh cơm hoặc Nhà Ăn đã phát mì/sữa.",
-    roles: ["admin", "ehs", "Nhà Ăn", ...DEPARTMENTS]
+    roles: ["admin", "ehs", "Nhà Ăn", ...DEPARTMENT_ROLES]
   }
 ];
-
-const getWeekNumber = (d) => {
-  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
-  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-  return Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
-};
-
-const formatRelativeTime = (timestamp) => {
-  if (!timestamp) return "";
-  const timeMs = timestamp.seconds ? timestamp.seconds * 1000 : timestamp;
-  const diffMs = Date.now() - timeMs;
-  const diffSec = Math.floor(diffMs / 1000);
-  const diffMin = Math.floor(diffSec / 60);
-  const diffHour = Math.floor(diffMin / 60);
-  const diffDay = Math.floor(diffHour / 24);
-
-  if (diffSec < 60) return "Vài giây trước";
-  if (diffMin < 60) return `${diffMin} phút trước`;
-  if (diffHour < 24) return `${diffHour} giờ trước`;
-  if (diffDay === 1) return "Hôm qua";
-  if (diffDay < 7) return `${diffDay} ngày trước`;
-  return new Date(timeMs).toLocaleDateString("vi-VN");
-};
 
 const getNotificationIcon = (type) => {
   switch (type) {
@@ -92,16 +63,16 @@ const getNotificationIcon = (type) => {
 
 const getTabForNotification = (type) => {
   switch (type) {
-    case "new_gemba_error":    return 0; // Tab Gemba
-    case "new_tu_gemba_error": return 1; // Tab Tự Gemba
-    case "new_error":          return 0; // fallback cũ → Gemba
-    case "bodam_assign":       return 2; // Tab Bộ đàm
-    case "shift_assign":       return 3; // Tab Ca làm việc
-    case "shift_note":         return 3; // Tab Ca làm việc
-    case "shift_reminder":     return 3; // Tab Ca làm việc
-    case "role_request":       return 8; // Tab Quản lý người dùng
-    case "role_response":      return 0;
-    case "meal_registration":  return 7; // Tab Báo Cơm
+    case "new_gemba_error":    return { main: 0 };
+    case "new_tu_gemba_error": return { main: 1 };
+    case "new_error":          return { main: 0 };
+    case "bodam_assign":       return { main: 2, sub: "bodam" };
+    case "shift_assign":       return { main: 2, sub: "calamviec" };
+    case "shift_note":         return { main: 2, sub: "calamviec" };
+    case "shift_reminder":     return { main: 2, sub: "calamviec" };
+    case "role_request":       return { main: 4 };
+    case "role_response":      return { main: 0 };
+    case "meal_registration":  return { main: 3 };
     default: return null;
   }
 };
@@ -236,6 +207,7 @@ export default function NotificationBell({ user, setActiveTab }) {
     }
   });
   const [showSettings, setShowSettings] = useState(false);
+  const [showAllModal, setShowAllModal] = useState(false);
 
   // Sync settings when user changes
   useEffect(() => {
@@ -285,53 +257,74 @@ export default function NotificationBell({ user, setActiveTab }) {
       return;
     }
 
-    initialLoadRole.current = true;
+    const rawRolesList = user?.role ? (Array.isArray(user.role) ? user.role : String(user.role).split(',').map(r => r.trim()).filter(Boolean)) : [];
     initialLoadUser.current = true;
 
-    const qRole = query(
-      collection(db, "notifications"),
-      where("targetRoles", "array-contains", user.role || "")
-    );
+    // Quản lý việc load lần đầu của từng role
+    const initialLoadMap = {};
+    rawRolesList.forEach(role => {
+      initialLoadMap[role] = true;
+    });
+
+    const roleNotificationsMap = {};
+    const unsubs = [];
+
+    rawRolesList.forEach(role => {
+      const qRole = query(
+        collection(db, "notifications"),
+        where("targetRoles", "array-contains", role)
+      );
+
+      const unsub = onSnapshot(qRole, (snap) => {
+        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        roleNotificationsMap[role] = list;
+
+        // Gộp tất cả các list lại
+        const combinedMap = new Map();
+        rawRolesList.forEach(r => {
+          const l = roleNotificationsMap[r] || [];
+          l.forEach(n => combinedMap.set(n.id, n));
+        });
+        setRoleNotifications(Array.from(combinedMap.values()));
+
+        if (initialLoadMap[role]) {
+          snap.docs.forEach(d => seenIdsRef.current.add(d.id));
+          initialLoadMap[role] = false;
+          return;
+        }
+
+        const isNotifTypeEnabledRef = (type) => {
+          let targetType = type;
+          if (type === "shift_assign" || type === "shift_note") {
+            targetType = "shift_reminder";
+          }
+          return settingsRef.current[targetType] !== false;
+        };
+
+        // Lọc thông báo mới, chưa đọc, và KHÔNG phải do chính mình tạo
+        const newNotifs = list
+          .filter(n => !seenIdsRef.current.has(n.id))
+          .filter(n =>
+            !(n.readBy || []).includes(user.uid) && // chưa đọc
+            n.createdBy !== user.uid &&             // không phải do mình tạo
+            isNotifTypeEnabledRef(n.type)          // chưa bị tắt
+          );
+
+        newNotifs.forEach(n => {
+          seenIdsRef.current.add(n.id);
+          setToastQueue(prev => [...prev, { ...n, toastId: `${n.id}-${Date.now()}` }]);
+        });
+        
+        snap.docs.forEach(d => seenIdsRef.current.add(d.id));
+      }, (err) => console.error(`Lỗi Role Notif (${role}):`, err));
+
+      unsubs.push(unsub);
+    });
 
     const qUser = query(
       collection(db, "notifications"),
       where("targetUserId", "==", user.uid)
     );
-
-    const unsubRole = onSnapshot(qRole, (snap) => {
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setRoleNotifications(list);
-
-      if (initialLoadRole.current) {
-        snap.docs.forEach(d => seenIdsRef.current.add(d.id));
-        initialLoadRole.current = false; 
-        return;
-      }
-
-      const isNotifTypeEnabledRef = (type) => {
-        let targetType = type;
-        if (type === "shift_assign" || type === "shift_note") {
-          targetType = "shift_reminder";
-        }
-        return settingsRef.current[targetType] !== false;
-      };
-
-      // Lọc thông báo mới, chưa đọc, và KHÔNG phải do chính mình tạo
-      const newNotifs = list
-        .filter(n => !seenIdsRef.current.has(n.id))
-        .filter(n =>
-          !(n.readBy || []).includes(user.uid) && // chưa đọc
-          n.createdBy !== user.uid &&             // không phải do mình tạo
-          isNotifTypeEnabledRef(n.type)          // chưa bị tắt
-        );
-
-      newNotifs.forEach(n => {
-        seenIdsRef.current.add(n.id);
-        setToastQueue(prev => [...prev, { ...n, toastId: `${n.id}-${Date.now()}` }]);
-      });
-      
-      snap.docs.forEach(d => seenIdsRef.current.add(d.id));
-    }, (err) => console.error("Lỗi Role Notif:", err));
 
     const unsubUser = onSnapshot(qUser, (snap) => {
       const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -369,7 +362,7 @@ export default function NotificationBell({ user, setActiveTab }) {
     }, (err) => console.error("Lỗi User Notif:", err));
 
     return () => {
-      unsubRole();
+      unsubs.forEach(unsub => unsub());
       unsubUser();
     };
   }, [user]);
@@ -379,8 +372,9 @@ export default function NotificationBell({ user, setActiveTab }) {
     if (!user || !user.name) return;
 
     // CHỈ áp dụng thông báo cho users có vai trò là "ehs committee"
-    const userRoleNormalized = (user.role || "").toLowerCase();
-    if (userRoleNormalized !== "ehs committee") {
+    const rawRolesList = user?.role ? (Array.isArray(user.role) ? user.role : String(user.role).split(',').map(r => r.trim()).filter(Boolean)) : [];
+    const rolesNormalized = rawRolesList.map(r => String(r).toLowerCase());
+    if (!rolesNormalized.includes("ehs committee")) {
       setLocalNotifications([]);
       return;
     }
@@ -467,9 +461,13 @@ export default function NotificationBell({ user, setActiveTab }) {
     
     // Đóng dropdown và chuyển tab
     setIsOpen(false);
-    const targetTab = getTabForNotification(notif.type);
-    if (targetTab !== null && setActiveTab) {
-      setActiveTab(targetTab);
+    const target = getTabForNotification(notif.type);
+    if (target !== null && setActiveTab) {
+      if (typeof target === "object" && target.main !== undefined) {
+        setActiveTab(target.main, target.sub);
+      } else {
+        setActiveTab(target);
+      }
     }
   };
 
@@ -478,7 +476,7 @@ export default function NotificationBell({ user, setActiveTab }) {
   }, []);
 
   const markAllAsRead = async () => {
-    const unread = allNotifications.filter(n => !n.isLocal && !(n.readBy || []).includes(user.uid));
+    const unread = filteredNotifications.filter(n => !n.isLocal && !(n.readBy || []).includes(user.uid));
     if (unread.length === 0) return;
     try {
       const batch = writeBatch(db);
@@ -537,12 +535,12 @@ export default function NotificationBell({ user, setActiveTab }) {
           right: 0,
           background: "white",
           width: 320,
-          maxHeight: 450,
-          overflowY: "auto",
           boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
           borderRadius: 12,
           zIndex: 1000,
-          padding: "10px 0"
+          padding: "10px 0",
+          display: "flex",
+          flexDirection: "column"
         }}>
           <div style={{ padding: "5px 15px 10px", borderBottom: "1px solid #eee", display: "flex", flexDirection: "column", gap: 6 }}>
             <div style={{ fontWeight: "bold", fontSize: 18, color: colors.primary, marginBottom: 4 }}>Thông báo</div>
@@ -596,56 +594,83 @@ export default function NotificationBell({ user, setActiveTab }) {
               </button>
             </div>
           </div>
-          {allNotifications.length === 0 ? (
-            <div style={{ padding: 20, textAlign: "center", color: "#888" }}>Không có thông báo nào</div>
-          ) : (
-            allNotifications.map(n => {
-              const isUnread = !(n.readBy || []).includes(user.uid);
-              return (
-                <div 
-                  key={n.id} 
-                  onClick={() => markAsReadAndNavigate(n)}
-                  style={{
-                    padding: "12px 15px",
-                    borderBottom: "1px solid #f5f5f5",
-                    background: isUnread ? "#fff6ea" : "white",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "flex-start",
-                    gap: 12,
-                    transition: "background 0.2s"
-                  }}
-                  onMouseOver={(e) => { if (!isUnread) e.currentTarget.style.background = "#f9f9f9"; }}
-                  onMouseOut={(e) => { if (!isUnread) e.currentTarget.style.background = "white"; }}
-                >
-                  <div style={{ fontSize: 24, flexShrink: 0, marginTop: 2 }}>
-                    {getNotificationIcon(n.type)}
-                  </div>
-                  <div style={{ flexGrow: 1 }}>
-                    <div style={{ 
-                      fontSize: 14, 
-                      color: isUnread ? "#222" : "#555", 
-                      fontWeight: isUnread ? "600" : "400",
-                      lineHeight: "1.4"
-                    }}>
-                      {n.message}
+          <div style={{ maxHeight: 280, overflowY: "auto" }}>
+            {allNotifications.length === 0 ? (
+              <div style={{ padding: 20, textAlign: "center", color: "#888" }}>Không có thông báo nào</div>
+            ) : (
+              allNotifications.map(n => {
+                const isUnread = !(n.readBy || []).includes(user.uid);
+                return (
+                  <div 
+                    key={n.id} 
+                    onClick={() => markAsReadAndNavigate(n)}
+                    style={{
+                      padding: "12px 15px",
+                      borderBottom: "1px solid #f5f5f5",
+                      background: isUnread ? "#fff6ea" : "white",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: 12,
+                      transition: "background 0.2s"
+                    }}
+                    onMouseOver={(e) => { if (!isUnread) e.currentTarget.style.background = "#f9f9f9"; }}
+                    onMouseOut={(e) => { if (!isUnread) e.currentTarget.style.background = "white"; }}
+                  >
+                    <div style={{ fontSize: 24, flexShrink: 0, marginTop: 2 }}>
+                      {getNotificationIcon(n.type)}
                     </div>
-                    <div style={{ 
-                      fontSize: 12, 
-                      color: isUnread ? colors.primary : "#999", 
-                      marginTop: 4,
-                      fontWeight: isUnread ? "500" : "400" 
-                    }}>
-                      {formatRelativeTime(n.timestamp)}
+                    <div style={{ flexGrow: 1 }}>
+                      <div style={{ 
+                        fontSize: 14, 
+                        color: isUnread ? "#222" : "#555", 
+                        fontWeight: isUnread ? "600" : "400",
+                        lineHeight: "1.4"
+                      }}>
+                        {n.message}
+                      </div>
+                      <div style={{ 
+                        fontSize: 12, 
+                        color: isUnread ? colors.primary : "#999", 
+                        marginTop: 4,
+                        fontWeight: isUnread ? "500" : "400" 
+                      }}>
+                        {formatRelativeTime(n.timestamp)}
+                      </div>
                     </div>
+                    {isUnread && (
+                      <div style={{ width: 10, height: 10, borderRadius: "50%", background: colors.primary, flexShrink: 0, marginTop: 6 }} />
+                    )}
                   </div>
-                  {isUnread && (
-                    <div style={{ width: 10, height: 10, borderRadius: "50%", background: colors.primary, flexShrink: 0, marginTop: 6 }} />
-                  )}
-                </div>
-              );
-            })
-          )}
+                );
+              })
+            )}
+          </div>
+          <div style={{ borderTop: "1px solid #eee", padding: "8px 15px 0", display: "flex", justifyContent: "center" }}>
+            <button
+              onClick={() => { setShowAllModal(true); setIsOpen(false); }}
+              style={{
+                width: "100%",
+                padding: "8px 12px",
+                border: "none",
+                background: colors.primary + "12",
+                color: colors.primary,
+                fontWeight: "bold",
+                fontSize: 13.5,
+                borderRadius: 8,
+                cursor: "pointer",
+                transition: "background 0.2s",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6
+              }}
+              onMouseOver={(e) => { e.currentTarget.style.background = colors.primary + "22"; }}
+              onMouseOut={(e) => { e.currentTarget.style.background = colors.primary + "12"; }}
+            >
+              🌐 Xem tất cả thông báo
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -680,7 +705,7 @@ export default function NotificationBell({ user, setActiveTab }) {
 
           <div style={{ display: "flex", flexDirection: "column", gap: 14, maxHeight: "55vh", overflowY: "auto", paddingRight: 4 }}>
             {(() => {
-              const userRoles = Array.isArray(user?.role) ? user.role : [user?.role || ""];
+              const userRoles = Array.isArray(user?.role) ? user.role : String(user?.role || "").split(',').map(r => r.trim()).filter(Boolean);
               const userRolesLower = userRoles.map(r => String(r).toLowerCase());
               
               const applicableTypes = NOTIFICATION_TYPES_CONFIG.filter(cfg => {
@@ -762,6 +787,152 @@ export default function NotificationBell({ user, setActiveTab }) {
               style={{ padding: "8px 20px", background: colors.primary, color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, cursor: "pointer" }}
             >
               Lưu thay đổi
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* ===== MODAL XEM TẤT CẢ THÔNG BÁO ===== */}
+    {showAllModal && (
+      <div style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,.5)",
+        display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10000
+      }}>
+        <div style={{
+          background: "#fff", borderRadius: 16,
+          width: "min(600px, 95vw)", maxHeight: "80vh",
+          boxShadow: "0 10px 40px rgba(0,0,0,.25)",
+          display: "flex", flexDirection: "column", overflow: "hidden"
+        }}>
+          {/* Header */}
+          <div style={{
+            padding: "16px 20px",
+            borderBottom: "1.5px solid #eee",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            background: "#fafafa"
+          }}>
+            <h3 style={{ margin: 0, color: colors.primary, display: "flex", alignItems: "center", gap: 8 }}>
+              <span>🔔</span> Tất cả thông báo ({filteredNotifications.length})
+            </h3>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <button
+                onClick={markAllAsRead}
+                style={{
+                  fontSize: 13,
+                  color: colors.primary,
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  fontWeight: 600,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4
+                }}
+              >
+                ✓ Đánh dấu tất cả đã đọc
+              </button>
+              <button
+                onClick={() => setShowAllModal(false)}
+                style={{
+                  background: "#eee",
+                  border: "none",
+                  borderRadius: "50%",
+                  width: 28,
+                  height: 28,
+                  cursor: "pointer",
+                  fontSize: 14,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#666"
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+
+          {/* Body */}
+          <div style={{ flex: 1, overflowY: "auto", padding: "10px 0" }}>
+            {filteredNotifications.length === 0 ? (
+              <div style={{ padding: 40, textAlign: "center", color: "#888" }}>Không có thông báo nào</div>
+            ) : (
+              filteredNotifications.map(n => {
+                const isUnread = !(n.readBy || []).includes(user.uid);
+                return (
+                  <div 
+                    key={n.id} 
+                    onClick={() => {
+                      markAsReadAndNavigate(n);
+                      setShowAllModal(false);
+                    }}
+                    style={{
+                      padding: "14px 20px",
+                      borderBottom: "1px solid #f0f0f0",
+                      background: isUnread ? "#fff6ea" : "white",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: 14,
+                      transition: "background 0.2s"
+                    }}
+                    onMouseOver={(e) => { if (!isUnread) e.currentTarget.style.background = "#f9f9f9"; }}
+                    onMouseOut={(e) => { if (!isUnread) e.currentTarget.style.background = "white"; }}
+                  >
+                    <div style={{ fontSize: 28, flexShrink: 0, marginTop: 2 }}>
+                      {getNotificationIcon(n.type)}
+                    </div>
+                    <div style={{ flexGrow: 1 }}>
+                      <div style={{ 
+                        fontSize: 14.5, 
+                        color: isUnread ? "#111" : "#444", 
+                        fontWeight: isUnread ? "600" : "400",
+                        lineHeight: "1.45"
+                      }}>
+                        {n.message}
+                      </div>
+                      <div style={{ 
+                        fontSize: 12.5, 
+                        color: isUnread ? colors.primary : "#888", 
+                        marginTop: 6,
+                        fontWeight: isUnread ? "500" : "400" 
+                      }}>
+                        {formatRelativeTime(n.timestamp)}
+                      </div>
+                    </div>
+                    {isUnread && (
+                      <div style={{ width: 10, height: 10, borderRadius: "50%", background: colors.primary, flexShrink: 0, marginTop: 8 }} />
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Footer */}
+          <div style={{
+            padding: "12px 20px",
+            borderTop: "1.5px solid #eee",
+            display: "flex",
+            justifyContent: "flex-end",
+            background: "#fafafa"
+          }}>
+            <button
+              onClick={() => setShowAllModal(false)}
+              style={{
+                padding: "8px 20px",
+                background: colors.primary,
+                color: "#fff",
+                border: "none",
+                borderRadius: 8,
+                fontWeight: 700,
+                cursor: "pointer"
+              }}
+            >
+              Đóng
             </button>
           </div>
         </div>

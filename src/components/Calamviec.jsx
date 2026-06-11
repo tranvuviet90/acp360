@@ -151,11 +151,10 @@ function CaLamViec({ user, isMobile }) {
 
   const selectedDateId = formatDateToId(selectedDate);
   const currentUserName = user?.name || "";
-  const userRole = (user && user.role) ? user.role.toLowerCase() : "";
-
-  const canUpdateShift = ["admin", "ehs", "ehs committee"].includes(userRole);
-  const canPlanBoard = ["admin", "ehs"].includes(userRole);
-  const isEhsCommittee = userRole === "ehs committee";
+  const userRoles = user?.role ? (Array.isArray(user.role) ? user.role.map(r => String(r).toLowerCase()) : String(user.role).split(',').map(r => r.trim().toLowerCase())) : [];
+  const canUpdateShift = userRoles.some(r => ["admin", "ehs", "ehs committee"].includes(r));
+  const canPlanBoard = userRoles.some(r => ["admin", "ehs"].includes(r));
+  const isEhsCommittee = userRoles.includes("ehs committee");
   const today = new Date();
   const isSundayMorning = today.getDay() === 0 && today.getHours() < 12;
 
@@ -167,18 +166,24 @@ function CaLamViec({ user, isMobile }) {
     }
   }, [user]);
 
+  const getUserRolesList = (u) => {
+    if (!u || !u.role) return [];
+    const arr = Array.isArray(u.role) ? u.role : [String(u.role)];
+    return arr.flatMap(r => String(r).split(',')).map(r => r.trim().toLowerCase()).filter(Boolean);
+  };
+
   const targetUsersList = useMemo(() => {
     return allUsers
       .filter((u) => {
-        const r = u.role?.toLowerCase() || "";
-        return ["admin", "ehs"].includes(r);
+        const roles = getUserRolesList(u);
+        return roles.includes("admin") || roles.includes("ehs");
       })
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [allUsers]);
 
   const ehsCommitteeMembers = useMemo(
     () => allUsers
-      .filter((u) => u.role?.toLowerCase() === "ehs committee")
+      .filter((u) => getUserRolesList(u).includes("ehs committee"))
       .sort((a, b) => a.name.localeCompare(b.name)),
     [allUsers]
   );
@@ -490,8 +495,8 @@ function CaLamViec({ user, isMobile }) {
     if (!draggedNameFromDraggableId) return;
 
     const draggedUser = allUsers.find((u) => u.name === draggedNameFromDraggableId);
-    const draggedUserRole = draggedUser?.role?.toLowerCase();
-    if (draggedUserRole === "admin" || draggedUserRole === "ehs") return;
+    const draggedUserRoles = getUserRolesList(draggedUser);
+    if (draggedUserRoles.includes("admin") || draggedUserRoles.includes("ehs")) return;
 
     const draggedName = draggableId.includes("-")
       ? board[selectedDateId][parseBoardDroppableId(source.droppableId).shift][
@@ -970,8 +975,8 @@ function CaLamViec({ user, isMobile }) {
                         .filter((name) => userShifts[name]?.[selectedDateId] === shiftKey)
                         .map((name, index) => {
                           const userDetails = allUsers.find((u) => u.name === name);
-                          const userRoleFromList = userDetails?.role?.toLowerCase() || "";
-                          const isProtectedRole = userRoleFromList === "admin" || userRoleFromList === "ehs";
+                          const userRolesList = getUserRolesList(userDetails);
+                          const isProtectedRole = userRolesList.includes("admin") || userRolesList.includes("ehs");
                           const isOff = shiftKey === "Off";
                           return (
                             <Draggable key={name} draggableId={name} index={index} isDragDisabled={!canPlanBoard || isProtectedRole || isOff}>

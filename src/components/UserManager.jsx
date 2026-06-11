@@ -5,14 +5,7 @@ import { collection, query, where, getDocs, orderBy, doc, getDoc, setDoc } from 
 import { httpsCallable } from 'firebase/functions';
 import { useToast, useConfirm } from './LightboxSwipeOnly';
 import { colors } from '../theme';
-
-const ALL_ROLES = [
-  "admin", "ehs", "ehs committee", "trainer", "manager", "Nhà Ăn",
-  "G_Cutting","G_Rolling","G_Finishing","G_Dipping","G_Buffing","G_Graphics",
-  "G_QC","A_QC","QC_Management","Kayak","A_Rolling","A_Cosmetics","Planning",
-  "Kho VW","WH_SK","WH_FG","WH_EM","WH_AG","Apple","MTN","Paint Blending",
-  "Engineering","MFG","Bảo Vệ","Tạp Vụ","Office"
-];
+import { ALL_ROLES } from '../constants/roles';
 
 export default function UserManager({ user, isMobile }) {
   const { t } = useI18n();
@@ -39,9 +32,8 @@ export default function UserManager({ user, isMobile }) {
   // Helper: parse role thành mảng, bất kể lưu dạng string hay array
   const parseRoles = (role) => {
     if (!role) return [];
-    if (Array.isArray(role)) return role;
-    // Nếu là chuỗi nhiều role phân cách bằng dấu phẩy (ví dụ: "G_Cutting, admin, ehs")
-    return role.split(',').map(r => r.trim()).filter(Boolean);
+    const arr = Array.isArray(role) ? role : [String(role)];
+    return arr.flatMap(r => String(r).split(',')).map(r => r.trim()).filter(Boolean);
   };
   const [createAccountModal, setCreateAccountModal] = useState(false);
   const [newAccountData, setNewAccountData] = useState({ name: '', email: '', password: '', role: 'Nhà Ăn', customRole: '' });
@@ -329,7 +321,7 @@ export default function UserManager({ user, isMobile }) {
     return (
       (u.name || '').toLowerCase().includes(term) ||
       (u.email || '').toLowerCase().includes(term) ||
-      (u.role || '').toLowerCase().includes(term)
+      (Array.isArray(u.role) ? u.role.join(', ') : (u.role || '')).toLowerCase().includes(term)
     );
   });
 
@@ -1004,7 +996,7 @@ export default function UserManager({ user, isMobile }) {
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
               <button onClick={() => setRoleModal(null)} style={{ padding: '8px 16px', border: 'none', borderRadius: 6, cursor: 'pointer' }}>Hủy</button>
               <button
-                onClick={() => handleAdminAction('changeRole', roleModal.uid, { newRole: selectedRoles.length === 1 ? selectedRoles[0] : selectedRoles.join(', ') })}
+                onClick={() => handleAdminAction('changeRole', roleModal.uid, { newRole: selectedRoles })}
                 disabled={selectedRoles.length === 0}
                 style={{ padding: '8px 16px', border: 'none', borderRadius: 6, background: colors.primary, color: 'white', fontWeight: 'bold', cursor: 'pointer', opacity: selectedRoles.length === 0 ? 0.5 : 1 }}
               >

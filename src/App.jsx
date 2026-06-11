@@ -1,19 +1,17 @@
 // Tệp đã sửa lỗi: App.jsx
 // Đã thêm logic để không fetch-count nếu là vai trò 'Bộ phận' hoặc 'Nhà Ăn'
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense, lazy } from "react";
+import ErrorBoundary from "./components/ErrorBoundary";
 import Login from "./components/Login";
-import DailyAudit from "./components/DailyAudit";
-import Gemba from "./components/Gemba";
-import Bodam from "./components/Bodam";
-import Calamviec from "./components/Calamviec";
-import GiamSatHutThuoc from "./components/GiamSatHutThuoc";
-import GiamSatGiaiLao from "./components/GiamSatGiaiLao";
-import GiamSatNhaRac from "./components/GiamSatNhaRac";
-import BaoCom from "./components/BaoCom";
 import UserSettings from "./components/UserSettings";
-import UserManager from "./components/UserManager";
-import DocumentManager from "./components/DocumentManager";
 import NotificationBell from "./components/NotificationBell";
+
+const DailyAudit = lazy(() => import("./components/DailyAudit"));
+const Gemba = lazy(() => import("./components/Gemba"));
+const EhsCommittee = lazy(() => import("./components/EhsCommittee"));
+const BaoCom = lazy(() => import("./components/BaoCom"));
+const UserManager = lazy(() => import("./components/UserManager"));
+const DocumentManager = lazy(() => import("./components/DocumentManager"));
 import logo from "./assets/logo.png";
 import { auth, db } from "./firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
@@ -26,57 +24,14 @@ import { colors } from "./theme";
 import { ToastProvider, ConfirmProvider, useToast } from "./components/LightboxSwipeOnly";
 
 import { useI18n } from "./i18n/I18nProvider";
+import { DEPARTMENT_NAMES, DEPARTMENT_ROLES, SHIFT_START_HOURS } from "./constants/roles";
+import { normalizeRole, getWeekNumber, getWeekDates, formatDateToId } from "./utils/string";
 
-const departments = [
-  { name: "Cutting" }, { name: "Rolling" }, { name: "Finishing" }, { name: "Dipping" },
-  { name: "Graphics" }, { name: "QC" }, { name: "Warehouse" }, { name: "Arrow" },
-  { name: "MTN" }, { name: "ENG" },
-];
-
-// CHANGED: Đã sửa "Q_QC" thành "G_QC"
-const departmentRoles = [
-  "G_Cutting","G_Rolling","G_Finishing","G_Dipping","G_Buffing","G_Graphics",
-  "G_QC","A_QC","QC_Management","Kayak","A_Rolling","A_Cosmetics","Planning",
-  "Kho VW","WH_SK","WH_FG","WH_EM","WH_AG","Apple","MTN","Paint Blending",
-  "Engineering","MFG","Bảo Vệ","Tạp Vụ","Office"
-];
-
-const stripDiacritics = (s="") => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-const normalizeRole = (r) => stripDiacritics(String(r || "").trim()).toLowerCase();
-const deptRolesNormalized = new Set(departmentRoles.map(normalizeRole));
+// Dùng shared constants thay vì khai báo lại
+const departments = DEPARTMENT_NAMES.map(name => ({ name }));
+const deptRolesNormalized = new Set(DEPARTMENT_ROLES.map(normalizeRole));
 const CANTEEN_NORMALIZED = normalizeRole("Nhà Ăn");
 
-const getWeekNumber = (d) => {
-  d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
-};
-
-const getWeekDates = (baseDate) => {
-  const d = new Date(baseDate);
-  const dayOfWeek = d.getDay();
-  const diff = d.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
-  const firstDayOfWeek = new Date(d);
-  firstDayOfWeek.setDate(diff);
-
-  const weekDays = [];
-  for (let i = 0; i < 7; i++) {
-    const day = new Date(firstDayOfWeek);
-    day.setDate(day.getDate() + i);
-    weekDays.push(day);
-  }
-  return weekDays;
-};
-
-const formatDateToId = (date) => {
-  const year = date.getFullYear();
-  const month = date.getMonth() + 1;
-  const day = date.getDate();
-  const monthStr = month < 10 ? '0' + month : month;
-  const dayStr = day < 10 ? '0' + day : day;
-  return `${year}-${monthStr}-${dayStr}`;
-};
 
 function getAssignedShifts(assignedTo) {
   const shifts = { S1: null, S2: null, S3: null, HC: null, S8: null };
@@ -139,6 +94,14 @@ function ToastBridge() {
 
 export default function App() {
   const [tab, setTab] = useState(0);
+  const [ehsActiveSubTab, setEhsActiveSubTab] = useState("calamviec");
+
+  const handleSetActiveTab = (mainTab, subTab = null) => {
+    setTab(mainTab);
+    if (subTab) {
+      setEhsActiveSubTab(subTab);
+    }
+  };
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -154,10 +117,12 @@ export default function App() {
   const { t } = useI18n();
 
   // --- THÊM: ĐƯA BIẾN KIỂM TRA ROLE RA NGOÀI ĐỂ DÙNG CHUNG (Chống Ghost Mount) ---
-  const roleN = user ? normalizeRole(user.role) : "";
-  const isDept = deptRolesNormalized.has(roleN);
-  const isCanteen = roleN === CANTEEN_NORMALIZED;
-  const isRestrictedRole = isDept || isCanteen; 
+  const roleRawList = user?.role ? (Array.isArray(user.role) ? user.role : String(user.role).split(',').map(r => r.trim())) : [];
+  const rolesNormalized = roleRawList.map(normalizeRole);
+  const hasEhsAccess = rolesNormalized.some(r => ['admin', 'ehs', 'ehs committee', 'manager'].includes(r));
+  const hasDeptRole = rolesNormalized.some(r => deptRolesNormalized.has(r));
+  const hasCanteenRole = rolesNormalized.some(r => r === CANTEEN_NORMALIZED);
+  const isRestrictedRole = (hasDeptRole || hasCanteenRole) && !hasEhsAccess;
   // ---------------------------------------------------------------------------------
 
   useEffect(() => {
@@ -167,20 +132,21 @@ export default function App() {
         const snap = await getDoc(ref);
         if (snap.exists()) {
           const data = snap.data();
-          const userData = { uid: firebaseUser.uid, email: firebaseUser.email, ...data };
+          const rawRole = data.role;
+          const parsedRoles = rawRole ? (Array.isArray(rawRole) ? rawRole : [String(rawRole)]).flatMap(r => String(r).split(',')).map(r => r.trim()).filter(Boolean) : [];
+          const userData = { uid: firebaseUser.uid, email: firebaseUser.email, ...data, role: parsedRoles };
           setUser(userData);
 
-          const currentRoleN = normalizeRole(userData.role);
-          const currentIsDept = deptRolesNormalized.has(currentRoleN);
-          const currentIsCanteen = currentRoleN === CANTEEN_NORMALIZED;
+          const currentIsDept = parsedRoles.some(r => deptRolesNormalized.has(normalizeRole(r)));
+          const currentIsCanteen = parsedRoles.some(r => normalizeRole(r) === CANTEEN_NORMALIZED);
+          const currentHasEhs = parsedRoles.some(r => ['admin', 'ehs', 'ehs committee', 'manager'].includes(normalizeRole(r)));
           
           // --- SỬA LỖI TẠI ĐÂY ---
-          // CHANGED: Chỉ tự động chuyển đến tab Báo cơm (index 7) nếu người dùng
-          // có vai trò là một bộ phận hoặc là nhà ăn.
-          // Người dùng "ehs committee" được ủy quyền sẽ không bị chuyển tab,
-          // họ sẽ ở lại tab mặc định là 0. Logic hiển thị tab đã được xử lý
-          // trong MagicMenu.jsx nên tab Báo cơm vẫn sẽ xuất hiện.
-          setTab(currentIsDept || currentIsCanteen ? 7 : 0);
+          // CHANGED: Chỉ tự động chuyển đến tab Báo cơm (index 3) nếu người dùng
+          // chỉ có vai trò bộ phận hoặc nhà ăn (không có quyền EHS/Admin).
+          // Các tài khoản đa vai trò có quyền EHS/Admin sẽ giữ tab mặc định là 0.
+          const forceMealTab = (currentIsDept || currentIsCanteen) && !currentHasEhs;
+          setTab(forceMealTab ? 3 : 0);
           // --- KẾT THÚC SỬA LỖI ---
           
         } else {
@@ -248,7 +214,8 @@ export default function App() {
 
   // Automatic shift start and walkie-talkie reminders
   useEffect(() => {
-    if (!user || normalizeRole(user.role) !== "ehs committee") return;
+    const userRolesList = user?.role ? (Array.isArray(user.role) ? user.role.map(normalizeRole) : String(user.role).split(',').map(r => normalizeRole(r))) : [];
+    if (!user || !userRolesList.includes("ehs committee")) return;
 
     const checkReminders = async () => {
       try {
@@ -268,7 +235,7 @@ export default function App() {
 
         if (!todayShift || todayShift === "Off") return;
 
-        const SHIFT_START_HOURS = { S1: 6, S2: 14, S3: 22, HC: 8, S8: 8 };
+        // SHIFT_START_HOURS đã được import từ constants/roles.js
         const startHour = SHIFT_START_HOURS[todayShift];
         if (startHour === undefined) return;
 
@@ -396,7 +363,7 @@ export default function App() {
               {user?.name} {!isMobile && `(${user?.role})`}
             </span>
 
-            <NotificationBell user={user} setActiveTab={setTab} />
+            <NotificationBell user={user} setActiveTab={handleSetActiveTab} />
             <UserSettings user={user} onLogout={handleLogout} />
           </div>
         </div>
@@ -415,7 +382,7 @@ export default function App() {
           <MagicMenu
             user={user}
             activeTab={tab}
-            setActiveTab={setTab}
+            setActiveTab={handleSetActiveTab}
             gembaNotifCount={totalGembaNotifications}
             tuGembaNotifCount={totalTuGembaNotifications}
           />
@@ -437,23 +404,27 @@ export default function App() {
           boxSizing: "border-box"
         }}>
           <div style={{ width: "100%" }}>
-            {/* THÊM BỌC ĐIỀU KIỆN CHO TAB 0 VÀ 1 */}
-            {!isRestrictedRole && (
-              <div style={tabStyle(0)}>{shouldMount(0) && <DailyAudit user={user} isMobile={isMobile} newErrorCounts={gembaNotifCounts} setGembaNotifCounts={setGembaNotifCounts} />}</div>
-            )}
-            {!isRestrictedRole && (
-              <div style={tabStyle(1)}>{shouldMount(1) && <Gemba user={user} isMobile={isMobile} newLogCounts={tuGembaNotifCounts} setTuGembaNotifCounts={setTuGembaNotifCounts} />}</div>
-            )}
-            
-            {/* CÁC TAB CÒN LẠI GIỮ NGUYÊN */}
-            <div style={tabStyle(2)}>{shouldMount(2) && <Bodam user={user} isMobile={isMobile} />}</div>
-            <div style={tabStyle(3)}>{shouldMount(3) && <Calamviec user={user} isMobile={isMobile} />}</div>
-            <div style={tabStyle(4)}>{shouldMount(4) && <GiamSatHutThuoc user={user} isMobile={isMobile} />}</div>
-            <div style={tabStyle(5)}>{shouldMount(5) && <GiamSatGiaiLao user={user} isMobile={isMobile} />}</div>
-            <div style={tabStyle(6)}>{shouldMount(6) && <GiamSatNhaRac user={user} isMobile={isMobile} />}</div>
-            <div style={tabStyle(7)}>{shouldMount(7) && <BaoCom user={user} isMobile={isMobile} />}</div>
-            <div style={tabStyle(8)}>{shouldMount(8) && (user?.role === "admin" ? <UserManager user={user} isMobile={isMobile} /> : <div style={{padding:20}}>Access Denied</div>)}</div>
-            <div style={tabStyle(9)}>{shouldMount(9) && <DocumentManager user={user} isMobile={isMobile} />}</div>
+            <Suspense fallback={
+              <div style={{ padding: "60px 0", textAlign: "center", color: colors.textSecondary }}>
+                <div className="loading-spinner"></div>
+                <div>Đang tải tính năng...</div>
+              </div>
+            }>
+              {/* THÊM BỌC ĐIỀU KIỆN CHO TAB 0 VÀ 1 */}
+              {!isRestrictedRole && (
+                <div style={tabStyle(0)}>{shouldMount(0) && <ErrorBoundary fallbackTitle="Lỗi tải Gemba Checklist"><DailyAudit user={user} isMobile={isMobile} newErrorCounts={gembaNotifCounts} setGembaNotifCounts={setGembaNotifCounts} /></ErrorBoundary>}</div>
+              )}
+              {!isRestrictedRole && (
+                <div style={tabStyle(1)}>{shouldMount(1) && <ErrorBoundary fallbackTitle="Lỗi tải Tự Gemba"><Gemba user={user} isMobile={isMobile} newLogCounts={tuGembaNotifCounts} setTuGembaNotifCounts={setTuGembaNotifCounts} /></ErrorBoundary>}</div>
+              )}
+              
+              {/* EHS Committee Tab */}
+              <div style={tabStyle(2)}>{shouldMount(2) && <ErrorBoundary fallbackTitle="Lỗi tải EHS Committee"><EhsCommittee user={user} isMobile={isMobile} activeSubTab={ehsActiveSubTab} setActiveSubTab={setEhsActiveSubTab} /></ErrorBoundary>}</div>
+              
+              <div style={tabStyle(3)}>{shouldMount(3) && <ErrorBoundary fallbackTitle="Lỗi tải Báo cơm"><BaoCom user={user} isMobile={isMobile} /></ErrorBoundary>}</div>
+              <div style={tabStyle(4)}>{shouldMount(4) && <ErrorBoundary fallbackTitle="Lỗi tải Quản lý người dùng">{rolesNormalized.includes("admin") ? <UserManager user={user} isMobile={isMobile} /> : <div style={{padding:20}}>Access Denied</div>}</ErrorBoundary>}</div>
+              <div style={tabStyle(5)}>{shouldMount(5) && <ErrorBoundary fallbackTitle="Lỗi tải Tài liệu"><DocumentManager user={user} isMobile={isMobile} /></ErrorBoundary>}</div>
+            </Suspense>
           </div>
         </div>
 

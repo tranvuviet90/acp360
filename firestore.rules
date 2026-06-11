@@ -14,7 +14,7 @@ service cloud.firestore {
     }
     function getUserRole() {
       let r = existingUserData().role;
-      return r is list ? r : [r]; 
+      return r is list ? r : (r is string ? r.split(',\\s*') : [r]); 
     }
     function getUserName() {
       return existingUserData().name;
@@ -144,7 +144,7 @@ service cloud.firestore {
 
     match /tu_gemba_logs/{logId} {
       allow read: if isAllowedUser();
-      allow create: if isAllowedUser() && isOwner(incomingUserData());
+      allow create: if isAllowedUser();
       allow update, delete: if isAllowedUser() && (isAdminOrEHS() || isOwner(resource.data));
     }
 

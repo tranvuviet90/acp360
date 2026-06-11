@@ -18,23 +18,19 @@ import {
   IoDocumentsOutline,
 } from "react-icons/io5";
 import { MdSmokingRooms } from "react-icons/md";
-import { FaWalkieTalkie } from "react-icons/fa6";
-import { FiUsers } from "react-icons/fi";
+import { FaWalkieTalkie, FaUserShield, FaHelmetSafety } from "react-icons/fa6";
+import { FiUsers, FiSettings } from "react-icons/fi";
 
 const ALL_ITEMS = [
   { key: "menu.gemba", Icon: BsClipboard2Check, countProp: "gembaNotifCount" },
   { key: "menu.tugemba", Icon: IoFootsteps, countProp: "tuGembaNotifCount" },
-  { key: "menu.walkietalkie", Icon: FaWalkieTalkie },
   {
-    key: "menu.shift",
-    Icon: IoCalendarClearOutline,
+    key: "menu.ehsCommittee",
+    Icon: FaHelmetSafety,
     roles: ["admin", "ehs", "ehs committee", "manager"],
   },
-  { key: "menu.smoking", Icon: MdSmokingRooms },
-  { key: "menu.break", Icon: IoCafeOutline },
-  { key: "menu.trash", Icon: IoTrash },
   { key: "menu.meal", Icon: IoRestaurantOutline },
-  { key: "manager.title", Icon: FiUsers, roles: ["admin"] },
+  { key: "manager.title", Icon: FiSettings, roles: ["admin"] },
   {
     key: "menu.documents",
     Icon: IoDocumentsOutline,
@@ -42,18 +38,11 @@ const ALL_ITEMS = [
   },
 ];
 
-// CHANGED: Đã sửa "Q_QC" thành "G_QC"
-const departmentRoles = [
-  "G_Cutting","G_Rolling","G_Finishing","G_Dipping","G_Buffing","G_Graphics",
-  "G_QC","A_QC","QC_Management","Kayak","A_Rolling","A_Cosmetics","Planning",
-  "Kho VW","WH_SK","WH_FG","WH_EM","WH_AG","Apple","MTN","Paint Blending",
-  "Engineering","MFG","Bảo Vệ","Tạp Vụ","Office"
-];
+import { DEPARTMENT_ROLES } from "../constants/roles";
+import { normalizeRole } from "../utils/string";
 
-const strip = (s = "") => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-const norm = (r) => strip(String(r || "").trim()).toLowerCase();
-const deptSet = new Set(departmentRoles.map(norm));
-const CANTEEN = norm("Nhà Ăn");
+const deptSet = new Set(DEPARTMENT_ROLES.map(normalizeRole));
+const CANTEEN = normalizeRole("Nhà Ăn");
 
 const rafThrottle = (fn) => {
   let ticking = false;
@@ -70,26 +59,31 @@ const rafThrottle = (fn) => {
 
 export default function MagicMenu({ user, activeTab, setActiveTab, ...props }) {
   const { t } = useI18n();
-  const roleN = norm(user?.role || "");
+  const userRolesList = useMemo(() => {
+    const raw = user?.role;
+    if (!raw) return [];
+    const arr = Array.isArray(raw) ? raw : [String(raw)];
+    return arr.flatMap(r => String(r).split(',')).map(r => normalizeRole(r)).filter(Boolean);
+  }, [user?.role]);
 
   const visible = useMemo(() => {
-    if (roleN === CANTEEN) return ALL_ITEMS.filter((i) => i.key === "menu.meal");
+    const isCanteen = userRolesList.includes(CANTEEN);
+    if (isCanteen) return ALL_ITEMS.filter((i) => i.key === "menu.meal");
+    
     const base = ALL_ITEMS.filter(
-      (i) => !i.roles || i.roles.map(norm).includes(roleN)
+      (item) => !item.roles || item.roles.map(normalizeRole).some(r => userRolesList.includes(r))
     );
     
-    // Logic này đã đúng để xử lý race condition.
-    // Khi user object được cập nhật đầy đủ (với mealDept), useMemo sẽ chạy lại
-    // và hiển thị tab Báo cơm một cách chính xác.
-    if (roleN === norm("ehs committee")) {
-      const hasValidProxy = user?.mealDept && deptSet.has(norm(user.mealDept));
+    // Show/hide meal registration tab for EHS Committee proxy
+    if (userRolesList.includes(normalizeRole("ehs committee"))) {
+      const hasValidProxy = user?.mealDept && deptSet.has(normalizeRole(user.mealDept));
       if (!hasValidProxy) {
         return base.filter((i) => i.key !== "menu.meal");
       }
     }
     
     return base;
-  }, [roleN, user]); // Phụ thuộc vào `user` đảm bảo re-render khi user data thay đổi.
+  }, [userRolesList, user]); // Phụ thuộc vào `user` đảm bảo re-render khi user data thay đổi.
 
   const navRef = useRef(null);
   const mountedRef = useRef(false);
@@ -176,8 +170,9 @@ export default function MagicMenu({ user, activeTab, setActiveTab, ...props }) {
         {visible.map((item) => {
           const originalIndex = ALL_ITEMS.findIndex((o) => o.key === item.key);
           const isActive = activeTab === originalIndex;
-          const isDeptRole = deptSet.has(roleN);
-          const isDisabled = isDeptRole && item.key !== "menu.meal";
+          const isDeptRole = userRolesList.some(r => deptSet.has(r));
+          const hasEhsAccess = userRolesList.some(r => ["admin", "ehs", "ehs committee", "manager"].includes(r));
+          const isDisabled = isDeptRole && !hasEhsAccess && item.key !== "menu.meal";
           const count = item.countProp ? props[item.countProp] || 0 : 0;
 
           return (

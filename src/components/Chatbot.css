@@ -72,3 +72,26 @@
     padding: 0 10px;
     line-height: 1;
 }
+
+/* Styling for Markdown rendering in Chatbot */
+.message.ai p {
+  margin: 4px 0;
+  line-height: 1.5;
+}
+.message.ai ul, .message.ai ol {
+  margin: 4px 0;
+  padding-left: 20px;
+}
+.message.ai li {
+  margin-bottom: 4px;
+  line-height: 1.5;
+}
+.message.ai pre {
+  margin: 8px 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+.message.ai strong {
+  color: #111;
+  font-weight: 700;
+}

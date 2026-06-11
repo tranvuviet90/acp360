@@ -26,14 +26,10 @@ function ImprovementIcon({ color = 'currentColor', size = 18 }) {
   );
 }
 
+import { GEMBA_DEPARTMENTS } from "../constants/roles";
+
 /* ====================== CẤU HÌNH ====================== */
-const departments = [
-  { name: "Cutting", defaultPeople: 15 }, { name: "Rolling", defaultPeople: 55 },
-  { name: "Finishing", defaultPeople: 22 }, { name: "Dipping", defaultPeople: 68 },
-  { name: "Graphics", defaultPeople: 12 }, { name: "QC", defaultPeople: 34 },
-  { name: "Warehouse", defaultPeople: 72 }, { name: "Arrow", defaultPeople: 17 },
-  { name: "MTN", defaultPeople: 95 }, { name: "ENG", defaultPeople: 110 },
-];
+const departments = GEMBA_DEPARTMENTS;
 
 function calcHeSo(people) {
   if (people < 20) return 5; if (people <= 50) return 4;
@@ -1047,7 +1043,9 @@ function DailyAudit({ user, isMobile, newErrorCounts, setGembaNotifCounts }) {
   const dep = departments[depIndex];
   const heSo = calcHeSo(peopleCount);
   const isCustomError = selectedGroup === "Lỗi Khác" || (selectedError && selectedError.endsWith(".other"));
-  const userRole = (user && user.role) ? user.role.toLowerCase() : "";
+  const userRolesList = user?.role ? (Array.isArray(user.role) ? user.role.map(r => String(r).toLowerCase()) : String(user.role).split(',').map(r => r.trim().toLowerCase())) : [];
+  const isAdminOrEhs = userRolesList.some(r => r === 'admin' || r === 'ehs');
+  const userRole = isAdminOrEhs ? 'admin' : (userRolesList[0] || "");
 
   // === Tự sửa chính tả ===
   const CLOUD_FUNCTION_URL = 'https://askai-zvblqnzylq-as.a.run.app';

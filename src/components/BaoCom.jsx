@@ -17,30 +17,18 @@ const noopPushToast = () => {};
 /* =========================
  * HẰNG SỐ & HỖ TRỢ CHUNG
  * ========================= */
-const SHIFTS = ['S1', 'S2', 'S3', 'S8', 'HC'];
-const SHIFT_NAMES = { S1: "Ca 1", S2: "Ca 2", S3: "Ca 3", S8: "Ca 8", HC: "Ca HC" };
+import { 
+  SHIFTS, 
+  SHIFT_NAMES, 
+  MEAL_TYPES, 
+  ALL_MEAL_KEYS, 
+  LABEL_BY_KEY, 
+  DEPARTMENT_ROLES 
+} from '../constants/roles';
+import { formatDateToId } from '../utils/string';
 
-const MEAL_TYPES = {
-  congNhan: { congNhanMan: 'Cơm mặn (CN)', congNhanChay: 'Cơm chay (CN)' },
-  giamSat:  { giamSatMan: 'Cơm mặn (GS)', giamSatChay: 'Cơm chay (GS)', giamSatSua: 'Sữa (cơm) (GS)' },
-  tangCa:   { tangCaMi: 'Mì (TC)', tangCaSua: 'Sữa (TC)' }
-};
-const ALL_MEAL_KEYS = Object.values(MEAL_TYPES).flatMap(o => Object.keys(o));
-const LABEL_BY_KEY = Object.fromEntries(Object.entries(MEAL_TYPES).flatMap(([_, g]) => Object.entries(g)));
-
-const DEPARTMENTS = [
-  "G_Cutting","G_Rolling","G_Finishing","G_Dipping","G_Buffing","G_Graphics",
-  "G_QC","A_QC","QC_Management","Kayak","A_Rolling","A_Cosmetics","Planning",
-  "Kho VW","WH_SK","WH_FG","WH_EM","WH_AG","Apple","MTN","Paint Blending",
-  "Engineering","MFG","Bảo Vệ","Tạp Vụ","Office"
-];
-
-const dateKey = (date) => {
-  const y = date.getFullYear();
-  const m = String(date.getMonth()+1).padStart(2,'0');
-  const d = String(date.getDate()).padStart(2,'0');
-  return `${y}-${m}-${d}`;
-};
+const DEPARTMENTS = DEPARTMENT_ROLES;
+const dateKey = formatDateToId;
 const fmtVN = (d) => {
   const dt = (d instanceof Date) ? d : new Date(d);
   return dt.toLocaleDateString('vi-VN', { day:'2-digit', month:'2-digit', year:'numeric' });
@@ -225,7 +213,8 @@ const NumberInput = React.memo(function NumberInput({ value, onChange, itemShift
 function DepartmentView({ user, reportData, selectedDateKey, selectedDate }) {
   const { pushToast } = useToast();
   const { askConfirm } = useConfirm();
-  const userRole = Array.isArray(user.role) ? (user.role.find(r => DEPARTMENTS.includes(r)) || user.role[0]) : user.role;
+  const rolesList = user?.role ? (Array.isArray(user.role) ? user.role : [String(user.role)]).flatMap(r => String(r).split(',')).map(r => r.trim()).filter(Boolean) : [];
+  const userRole = rolesList.find(r => DEPARTMENTS.includes(r)) || rolesList[0] || '';
   const [formData, setFormData] = useState({});
 
   // NEW: khóa đồng bộ khi đang gõ + snapshot gần nhất để so sánh sâu
@@ -2162,13 +2151,13 @@ export default function BaoCom({ user, isMobile }) {
   const selectedDateKey = dateKey(selectedDate);
   const prevStatusRef = useRef({});
 
-  const userRoles = user?.role ? (Array.isArray(user?.role) ? user.role.map(r => String(r).toLowerCase()) : [String(user.role).toLowerCase()]) : [];
-  const rawRoles = user?.role ? (Array.isArray(user?.role) ? user.role : [user.role]) : [];
+  const userRoles = user?.role ? (Array.isArray(user.role) ? user.role : [String(user.role)]).flatMap(r => String(r).split(',')).map(r => r.trim().toLowerCase()).filter(Boolean) : [];
+  const rawRoles = user?.role ? (Array.isArray(user.role) ? user.role : [String(user.role)]).flatMap(r => String(r).split(',')).map(r => r.trim()).filter(Boolean) : [];
 
   // Role ưu tiên để xác định giao diện chính (admin/ehs/Nhà Ăn)
   const isAdmin = userRoles.includes('admin') || userRoles.includes('ehs');
   const isCanteen = rawRoles.includes('Nhà Ăn');
-  const rawRole = rawRoles[0] || '';
+  const rawRole = rawRoles.join(', ');
 
   // Xác định tất cả các role bộ phận mà user có (có thể nhiều hơn 1)
   const deptRoles = rawRoles.filter(r => DEPARTMENTS.includes(r));

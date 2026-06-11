@@ -48,8 +48,8 @@ function BoDam({ user, isMobile }) {
   const { askConfirm } = useConfirm();
   const [status, setStatus] = useState([]);
   const [bodamCount, setBodamCount] = useState(DEFAULT_COUNT);
-  const userRole = (user && user.role) ? user.role.toLowerCase() : '';
-  const isAdmin = userRole === "admin" || userRole === "ehs";
+  const userRolesList = user?.role ? (Array.isArray(user.role) ? user.role.map(r => String(r).toLowerCase()) : String(user.role).split(',').map(r => r.trim().toLowerCase())) : [];
+  const isAdmin = userRolesList.some(r => r === "admin" || r === "ehs");
 
   // Lấy số lượng bộ đàm từ Firestore config
   useEffect(() => {
@@ -331,23 +331,25 @@ function BoDam({ user, isMobile }) {
                 <tr key={idx} style={{ background: idx % 2 ? "#F4FAF9" : "#fff", opacity: item.unavailable ? 0.5 : 1 }}>
                   <td style={{ padding: "15px 22px", fontWeight: 600, color: dark }}>{getBodamName(idx)}</td>
                   <td style={{ padding: "15px 22px" }}>
-                    <input type="checkbox" checked={item.checked || false} disabled={!canCheck} style={{ width: 22, height: 22, accentColor: orange, marginRight: 14, cursor: (!canCheck) ? 'not-allowed' : 'pointer', verticalAlign: 'middle' }} onChange={() => handleCheck(idx)} />
-                    {item.unavailable ? (
-                      <span style={{ color: red, fontWeight: 700 }}>{t("bodam.unavailable")}</span>
-                    ) : item.checked ? (
-                      <span style={{ color: orange, fontWeight: 700 }}>{item.name} — {t("bodam.inuse")}</span>
-                    ) : hasAssignments ? (
-                      <>
-                        <span style={{ color: "#d9534f", fontWeight: 700, marginRight: 10 }}>
-                          Chỉ định: {Object.entries(assignedShifts).filter(([_, u]) => u !== null).map(([sh, u]) => `${sh}: ${u.name}`).join(", ")}
-                        </span>
-                        {!item.checked && isUserAssigned && (
-                          <button onClick={() => handleAccept(idx)} style={{ background: '#4caf50', color: 'white', border: 'none', padding: '4px 10px', borderRadius: 4, cursor: 'pointer', fontWeight: 'bold' }}>Chấp nhận</button>
-                        )}
-                      </>
-                    ) : (
-                      <span style={{ color: "#b0b0b0", fontWeight: 600 }}>{t("bodam.returned")}</span>
-                    )}
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                      <input type="checkbox" checked={item.checked || false} disabled={!canCheck} style={{ width: 20, height: 20, accentColor: orange, marginRight: 6, cursor: (!canCheck) ? 'not-allowed' : 'pointer', verticalAlign: 'middle' }} onChange={() => handleCheck(idx)} />
+                      {item.unavailable ? (
+                        <span style={{ color: red, fontWeight: 700 }}>{t("bodam.unavailable")}</span>
+                      ) : item.checked ? (
+                        <span style={{ color: orange, fontWeight: 700 }}>{item.name} — {t("bodam.inuse")}</span>
+                      ) : hasAssignments ? (
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ color: "#d9534f", fontWeight: 700 }}>
+                            Chỉ định: {Object.entries(assignedShifts).filter(([_, u]) => u !== null).map(([sh, u]) => `${sh}: ${u.name}`).join(", ")}
+                          </span>
+                          {!item.checked && isUserAssigned && (
+                            <button onClick={() => handleAccept(idx)} style={{ background: '#4caf50', color: 'white', border: 'none', padding: '4px 10px', borderRadius: 4, cursor: 'pointer', fontWeight: 'bold' }}>Chấp nhận</button>
+                          )}
+                        </div>
+                      ) : (
+                        <span style={{ color: "#b0b0b0", fontWeight: 600 }}>{t("bodam.returned")}</span>
+                      )}
+                    </div>
                   </td>
                   {isAdmin && (
                     <td style={{ padding: "15px 22px" }}>
@@ -355,26 +357,42 @@ function BoDam({ user, isMobile }) {
                         {item.unavailable ? t("bodam.reopen") : t("bodam.markUnavailable")}
                       </button>
                       {!item.unavailable && (
-                        <div style={{ display: 'inline-flex', flexWrap: 'wrap', gap: '8px', verticalAlign: 'middle', maxWidth: '600px' }}>
+                        <div style={{ display: 'inline-flex', flexWrap: 'nowrap', gap: '6px', verticalAlign: 'middle', alignItems: 'center' }}>
                           {SHIFTS.map(sh => {
                             const val = assignedShifts[sh];
                             return (
-                              <div key={sh} style={{ display: 'inline-flex', alignItems: 'center', background: '#f5f5f5', padding: '4px 8px', borderRadius: 4, border: `1px solid ${orangeLight}`, fontSize: 13 }}>
-                                <span style={{ fontWeight: 'bold', marginRight: 4 }}>{sh}:</span>
+                              <div key={sh} style={{ 
+                                display: 'inline-flex', 
+                                alignItems: 'center', 
+                                background: val ? '#E5F4F2' : '#f5f5f5', 
+                                padding: '2px 6px', 
+                                borderRadius: 6, 
+                                border: `1px solid ${val ? orange : orangeLight}`, 
+                                fontSize: 12,
+                                whiteSpace: 'nowrap'
+                              }}>
+                                <span style={{ fontWeight: 'bold', marginRight: 4, color: val ? orange : '#555' }}>{sh}:</span>
                                 {val ? (
-                                  <>
-                                    <span style={{ marginRight: 6 }}>{val.name}</span>
-                                    <button onClick={() => handleCancelAssign(idx, sh, val.uid)} style={{ background: 'none', border: 'none', color: red, cursor: 'pointer', fontWeight: 'bold', padding: 0 }}>✕</button>
-                                  </>
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                    <span style={{ fontWeight: 500, maxWidth: 65, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={val.name}>{val.name}</span>
+                                    <button 
+                                      onClick={() => handleCancelAssign(idx, sh, val.uid)} 
+                                      style={{ background: 'none', border: 'none', color: red, cursor: 'pointer', fontWeight: 'bold', padding: '0 2px', fontSize: 12, display: 'inline-flex', alignItems: 'center' }}
+                                      title="Hủy chỉ định"
+                                    >✕</button>
+                                  </span>
                                 ) : (
-                                  <select style={{ padding: '2px 4px', borderRadius: 4, border: `1px solid ${orangeLight}`, fontSize: 12 }} onChange={(e) => {
-                                    if (e.target.value) {
-                                      const sel = committeeUsers.find(u => u.uid === e.target.value);
-                                      handleAssign(idx, sh, sel.uid, sel.name);
-                                      e.target.value = "";
-                                    }
-                                  }}>
-                                    <option value="">Chỉ định...</option>
+                                  <select 
+                                    style={{ padding: 0, borderRadius: 4, border: 'none', background: 'transparent', fontSize: 11, outline: 'none', cursor: 'pointer', color: '#666', fontWeight: 'bold' }} 
+                                    onChange={(e) => {
+                                      if (e.target.value) {
+                                        const sel = committeeUsers.find(u => u.uid === e.target.value);
+                                        handleAssign(idx, sh, sel.uid, sel.name);
+                                        e.target.value = "";
+                                      }
+                                    }}
+                                  >
+                                    <option value="">+</option>
                                     {committeeUsers.map(u => <option key={u.uid} value={u.uid}>{u.name}</option>)}
                                   </select>
                                 )}
