@@ -20,25 +20,34 @@
 
 ### 🚀 Hướng dẫn khởi chạy cục bộ & Triển khai đám mây (Local & Cloud Deployment)
 
-#### 1. Hướng dẫn khởi chạy dự án trên máy Local khác
+#### 1. Hướng dẫn khởi chạy dự án trên máy Local hoặc Máy chủ thuê (VPS/Server)
 
-Nếu bạn muốn sao chép toàn bộ dự án này sang một máy tính local mới để tiếp tục chạy và chỉnh sửa:
+Nếu bạn muốn sao chép toàn bộ dự án này sang một máy tính local mới hoặc máy chủ thuê (VPS) để chạy và phát triển:
 
 * **Bước 1: Chuẩn bị môi trường**
-  * Tải và cài đặt **Node.js** phiên bản LTS mới nhất từ trang chủ: [https://nodejs.org](https://nodejs.org). Công cụ quản lý gói `npm` sẽ tự động được cài đặt đi kèm.
-* **Bước 2: Giải nén mã nguồn**
-  * Sao chép tệp nén `acp360_local.zip` sang máy tính mới và giải nén ra một thư mục làm việc bất kỳ (ví dụ: `D:\SafeOne`).
-* **Bước 3: Cài đặt các gói phụ thuộc (Dependencies)**
-  * Mở terminal (PowerShell / Command Prompt) tại thư mục vừa giải nén và chạy lệnh sau để tự động tải toàn bộ thư viện:
-    ```bash
-    npm install
-    ```
-* **Bước 4: Khởi chạy Development Server**
-  * Chạy lệnh sau để kích hoạt server local thời gian thực:
+  * Tải và cài đặt **Node.js** phiên bản LTS mới nhất (v18+ hoặc v22+) trên máy chủ/máy trạm.
+* **Bước 2: Giải nén mã nguồn & Chạy script khởi tạo**
+  * Giải nén mã nguồn vào thư mục làm việc của máy chủ thuê.
+  * Mở terminal tại thư mục gốc và chạy file script khởi tạo tự động (script sẽ tạo các thư mục cấu trúc cần thiết, tạo file `.env` mẫu, và cài đặt toàn bộ dependencies):
+    * **Trên máy chủ Linux (Ubuntu/CentOS):**
+      ```bash
+      chmod +x init_folders.sh
+      ./init_folders.sh
+      ```
+    * **Trên máy chủ Windows Server:** Mở chạy tệp `init_folders.bat` bằng cách double-click hoặc chạy trong CMD.
+* **Bước 3: Cấu hình biến môi trường**
+  * Chỉnh sửa tệp `.env` vừa tạo để điền chính xác API keys và endpoint dịch vụ AI của bạn.
+* **Bước 4: Khởi chạy local / Chạy nền trên máy chủ**
+  * Chạy server local thời gian thực:
     ```bash
     npm run dev
     ```
-  * Mở trình duyệt và truy cập theo đường dẫn hiển thị trên terminal: `http://localhost:5173`.
+  * Mở trình duyệt truy cập `http://localhost:5173`.
+  * **Để chạy nền liên tục trên máy chủ thuê (VPS) không bị tắt khi ngắt terminal**, bạn nên dùng PM2:
+    ```bash
+    npm install -g pm2
+    pm2 start npm --name "safeone-app" -- run dev
+    ```
 
 ---
 
@@ -96,6 +105,14 @@ service cloud.firestore {
   match /databases/{database}/documents {
     // Yêu cầu người dùng phải đăng nhập thông qua Firebase Auth để đọc/ghi dữ liệu
     match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // --- NEW: RULES FOR LOCKERS AND LICENSES (EHS Committee new sub tabs) ---
+    match /lockers/{docId} {
+      allow read, write: if request.auth != null;
+    }
+    match /licenses/{docId} {
       allow read, write: if request.auth != null;
     }
   }

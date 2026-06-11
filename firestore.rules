@@ -187,5 +187,14 @@ service cloud.firestore {
       allow write: if isAuth() && getUserRole().hasAny(['admin']);
     }
 
+    // --- NEW: RULES FOR LOCKERS AND LICENSES (EHS Committee new sub tabs) ---
+    match /lockers/{docId} {
+      allow read, write: if isEhsTeam() || isManagerLevel();
+    }
+
+    match /licenses/{docId} {
+      allow read, write: if isEhsTeam() || isManagerLevel();
+    }
+
   }
 }
