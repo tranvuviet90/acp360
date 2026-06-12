@@ -19,7 +19,9 @@ import {
   submitRoleRequest,
   seedDefaultAdmin,
   verifyPassword,
-  updateUserPassword
+  updateUserPassword,
+  checkInit,
+  initAdmin
 } from "./controllers/authController.js";
 
 import { 
@@ -67,6 +69,8 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 // ===================================================================
 
 // 1. Custom authentication routes
+app.get("/api/auth/check-init", checkInit);
+app.post("/api/auth/init-admin", initAdmin);
 app.post("/api/auth/login", login);
 app.get("/api/auth/me", authenticateToken, getMe);
 app.post("/api/auth/verify-password", authenticateToken, verifyPassword);
@@ -140,10 +144,16 @@ io.on("connection", (socket) => {
 // ### SERVER INITIALIZATION & DATA SEEDING ###
 // ===================================================================
 
+// Ensure uploads folder exists
+const uploadsDir = path.join(__dirname, "uploads");
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, async () => {
   console.log(`SafeOne local server successfully listening on port ${PORT}`);
   
-  // Seed the default admin account: admin@safeone.com / admin
-  await seedDefaultAdmin();
+  // Autoseed is disabled as per requirement. Admin account will be created via UI first run.
+  console.log("ℹ️ Autoseed admin is disabled. First admin should be created using the UI.");
 });

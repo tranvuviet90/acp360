@@ -5,27 +5,35 @@ import jwt from "jsonwebtoken";
 
 const JWT_SECRET = process.env.JWT_SECRET || "safeone_super_secret_key_2026";
 
-// Auto-seed a default admin account if users table is empty
+// Auto-seed a default admin account and ensure it is loginable
 export async function seedDefaultAdmin() {
   try {
-    const [rows] = await pool.query("SELECT COUNT(*) as count FROM users");
-    if (rows[0].count === 0) {
-      console.log("MySQL users table is empty. Seeding default admin account...");
+    const [rows] = await pool.query("SELECT * FROM users WHERE email = ?", ["admin@safeone.com"]);
+    const passwordHash = "admin";
+    
+    if (rows.length === 0) {
+      console.log("🔄 Tài khoản admin@safeone.com chưa tồn tại. Đang tiến hành tạo mới...");
       const uid = "admin-uid-123456";
-      const email = "admin@safeone.com";
-      const passwordHash = await bcrypt.hash("admin", 10);
-      const name = "Admin Việt Trần";
-      const role = "admin";
+      const name = "Super Admin";
+      const role = "admin,ehs";
       await pool.query(
         "INSERT INTO users (uid, email, password_hash, name, role) VALUES (?, ?, ?, ?, ?)",
-        [uid, email, passwordHash, name, role]
+        [uid, "admin@safeone.com", passwordHash, name, role]
       );
-      console.log("Default admin account seeded successfully: admin@safeone.com / admin");
+      console.log("✅ Tài khoản Admin mặc định đã được tạo thành công: admin@safeone.com / admin");
+    } else {
+      console.log("🔄 Tài khoản admin@safeone.com đã tồn tại. Đang đồng bộ và đặt lại mật khẩu về mặc định...");
+      await pool.query(
+        "UPDATE users SET password_hash = ? WHERE email = ?",
+        [passwordHash, "admin@safeone.com"]
+      );
+      console.log("✅ Đã cập nhật mật khẩu mặc định thành công cho: admin@safeone.com / admin");
     }
   } catch (e) {
-    console.error("Failed to seed default admin user:", e.message);
+    console.error("❌ Lỗi khi tự động gieo hạt Admin:", e.message);
   }
 }
+
 
 // JWT verification middleware
 export function authenticateToken(req, res, next) {
@@ -68,7 +76,7 @@ export async function login(req, res) {
       return res.status(403).json({ error: "Tài khoản này đã bị khóa" });
     }
 
-    const validPassword = await bcrypt.compare(password, user.password_hash);
+    const validPassword = (password === user.password_hash);
     if (!validPassword) {
       return res.status(401).json({ error: "Tài khoản hoặc mật khẩu không đúng" });
     }
@@ -144,7 +152,7 @@ export async function adminUserAction(req, res) {
           return res.status(400).json({ error: "Thiếu thông tin tạo tài khoản" });
         }
         const uid = "user-" + Date.now() + Math.random().toString(36).substr(2, 9);
-        const passwordHash = await bcrypt.hash(data.password, 10);
+        const passwordHash = data.password;
         const roleStr = Array.isArray(data.role) ? data.role.join(",") : data.role;
         const name = data.name || data.email.split("@")[0];
 
@@ -156,7 +164,7 @@ export async function adminUserAction(req, res) {
       }
       case "resetPassword":
         if (!data || !data.newPassword) return res.status(400).json({ error: "Thiếu mật khẩu mới" });
-        const newPasswordHash = await bcrypt.hash(data.newPassword, 10);
+        const newPasswordHash = data.newPassword;
         await pool.query("UPDATE users SET password_hash = ? WHERE uid = ?", [newPasswordHash, targetUid]);
         break;
       case "changeRole":
@@ -264,7 +272,7 @@ export async function verifyPassword(req, res) {
     const [rows] = await pool.query("SELECT password_hash FROM users WHERE uid = ?", [req.user.uid]);
     if (rows.length === 0) return res.status(404).json({ error: "Người dùng không tồn tại" });
 
-    const validPassword = await bcrypt.compare(password, rows[0].password_hash);
+    const validPassword = (password === rows[0].password_hash);
     if (!validPassword) return res.status(401).json({ error: "Mật khẩu xác thực không đúng" });
 
     res.status(200).json({ success: true });
@@ -280,11 +288,53 @@ export async function updateUserPassword(req, res) {
   if (!newPassword) return res.status(400).json({ error: "Thiếu mật khẩu mới" });
 
   try {
-    const passwordHash = await bcrypt.hash(newPassword, 10);
+    const passwordHash = newPassword;
     await pool.query("UPDATE users SET password_hash = ? WHERE uid = ?", [passwordHash, req.user.uid]);
     res.status(200).json({ success: true });
   } catch (error) {
     console.error("Update password error:", error);
     res.status(500).json({ error: "Lỗi hệ thống" });
+  }
+}
+
+// checkInit checks if there are any users in the system
+export async function checkInit(req, res) {
+  try {
+    const [rows] = await pool.query("SELECT COUNT(*) as count FROM users");
+    const count = rows[0].count;
+    res.status(200).json({ initialized: count > 0 });
+  } catch (error) {
+    console.error("Check init error:", error);
+    res.status(500).json({ error: "Lỗi kiểm tra trạng thái khởi tạo" });
+  }
+}
+
+// initAdmin registers the first admin user if no users exist
+export async function initAdmin(req, res) {
+  const { email, password, name } = req.body;
+  if (!email || !password || !name) {
+    return res.status(400).json({ error: "Vui lòng điền đầy đủ thông tin: Tên, Email và Mật khẩu" });
+  }
+
+  try {
+    // Check if system is already initialized
+    const [checkRows] = await pool.query("SELECT COUNT(*) as count FROM users");
+    if (checkRows[0].count > 0) {
+      return res.status(400).json({ error: "Hệ thống đã được khởi tạo. Không thể đăng ký thêm admin qua endpoint này." });
+    }
+
+    const uid = "admin-uid-" + Date.now() + Math.random().toString(36).substr(2, 9);
+    const passwordHash = password;
+    const role = "admin,ehs";
+
+    await pool.query(
+      "INSERT INTO users (uid, email, password_hash, name, role) VALUES (?, ?, ?, ?, ?)",
+      [uid, email, passwordHash, name, role]
+    );
+
+    res.status(200).json({ success: true, message: "Khởi tạo tài khoản admin đầu tiên thành công!" });
+  } catch (error) {
+    console.error("Init admin error:", error);
+    res.status(500).json({ error: "Lỗi khởi tạo tài khoản admin đầu tiên" });
   }
 }
