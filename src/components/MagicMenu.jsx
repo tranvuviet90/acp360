@@ -67,8 +67,9 @@ export default function MagicMenu({ user, activeTab, setActiveTab, ...props }) {
   }, [user?.role]);
 
   const visible = useMemo(() => {
+    const hasEhsAccess = userRolesList.some(r => ["admin", "ehs", "ehs committee", "manager"].includes(r));
     const isCanteen = userRolesList.includes(CANTEEN);
-    if (isCanteen) return ALL_ITEMS.filter((i) => i.key === "menu.meal");
+    if (isCanteen && !hasEhsAccess) return ALL_ITEMS.filter((i) => i.key === "menu.meal");
     
     const base = ALL_ITEMS.filter(
       (item) => !item.roles || item.roles.map(normalizeRole).some(r => userRolesList.includes(r))
