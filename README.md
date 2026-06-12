@@ -49,6 +49,12 @@ Nếu bạn muốn sao chép toàn bộ dự án này sang một máy tính loca
     pm2 start npm --name "safeone-app" -- run dev
     ```
 
+* **Bước 5: Khởi tạo tài khoản Admin đầu tiên**
+  * SafeOne áp dụng cơ chế tự động phát hiện cơ sở dữ liệu trống thay vì tự động tạo tài khoản admin mặc định.
+  * Trong lần đầu tiên chạy ứng dụng local khi bảng `users` trống, trình duyệt sẽ tự động hiển thị màn hình **Khởi Tạo Hệ Thống** thay vì form login thông thường.
+  * Nhập Tên Admin, Email, và Mật khẩu theo ý muốn rồi bấm "Khởi Tạo & Đăng Ký Admin" để thiết lập. Sau khi đăng ký thành công, bạn sẽ quay lại màn hình đăng nhập chuẩn để đăng nhập bằng tài khoản vừa tạo.
+
+
 ---
 
 #### 2. Hướng dẫn đẩy bản cập nhật lên trang web (Firebase Hosting & Cloud Functions)
@@ -189,6 +195,12 @@ Start the development server:
 npm run dev
 ```
 Open your browser and visit: `http://localhost:5173`.
+
+#### 5. Initialize the First Admin Account (Local Env)
+* SafeOne automatically detects an empty database instead of auto-seeding a default admin.
+* Upon first access when no users exist, the browser will display the **System Initialization** page.
+* Fill in the Admin's Name, Email, and Password, then submit the registration. Once complete, you will be redirected to the standard login form to log in.
+
 
 #### 5. Build for Production
 To bundle and optimize the project for deployment:

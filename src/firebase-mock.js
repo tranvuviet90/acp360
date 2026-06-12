@@ -131,7 +131,30 @@ export function initializeApp(config) {
 // -------------------------------------------------------------
 const mockAuthInstance = {
   currentUser: null,
-  authStateListeners: new Set()
+  authStateListeners: new Set(),
+  isMock: true,
+  checkSystemInit: async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/check-init`);
+      if (!res.ok) return { initialized: true };
+      return await res.json();
+    } catch (e) {
+      console.warn("Check system init failed, assuming initialized:", e);
+      return { initialized: true };
+    }
+  },
+  initAdmin: async (email, password, name) => {
+    const res = await fetch(`${API_BASE}/api/auth/init-admin`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password, name })
+    });
+    if (!res.ok) {
+      const errorData = await res.json();
+      throw new Error(errorData.error || "Khởi tạo Admin thất bại");
+    }
+    return await res.json();
+  }
 };
 
 export function getAuth(app) {
