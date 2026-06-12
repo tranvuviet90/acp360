@@ -247,6 +247,19 @@ export function getFirestore(app) {
   return { name: "[MockFirestore]" };
 }
 
+export function initializeFirestore(app, config) {
+  console.log("Mock Firestore initialized with config:", config);
+  return { name: "[MockFirestore]" };
+}
+
+export function persistentLocalCache() {
+  return {};
+}
+
+export function persistentMultipleTabManager() {
+  return {};
+}
+
 export function doc(db, collectionName, id) {
   return { type: "doc", collection: collectionName, id };
 }

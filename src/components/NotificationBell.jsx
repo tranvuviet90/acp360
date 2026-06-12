@@ -198,6 +198,19 @@ export default function NotificationBell({ user, setActiveTab }) {
 
   const { pushToast } = useToast();
 
+  const [isPageVisible, setIsPageVisible] = useState(true);
+
+  // Monitor page visibility to pause connections when tab is hidden
+  useEffect(() => {
+    const handleVisibility = () => {
+      setIsPageVisible(document.visibilityState === "visible");
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, []);
+
   const [settings, setSettings] = useState(() => {
     try {
       const saved = localStorage.getItem(`notif_settings_${user?.uid}`);
@@ -251,7 +264,7 @@ export default function NotificationBell({ user, setActiveTab }) {
   }, [roleNotifications, userNotifications]);
 
   useEffect(() => {
-    if (!user) {
+    if (!user || !isPageVisible) {
       setRoleNotifications([]);
       setUserNotifications([]);
       return;
@@ -365,7 +378,7 @@ export default function NotificationBell({ user, setActiveTab }) {
       unsubs.forEach(unsub => unsub());
       unsubUser();
     };
-  }, [user]);
+  }, [user, isPageVisible]);
 
   // Logic nhắc nhở chọn ca
   useEffect(() => {

@@ -412,18 +412,18 @@ export default function App() {
             }>
               {/* THÊM BỌC ĐIỀU KIỆN CHO TAB 0 VÀ 1 */}
               {!isRestrictedRole && (
-                <div style={tabStyle(0)}>{shouldMount(0) && <ErrorBoundary fallbackTitle="Lỗi tải Gemba Checklist"><DailyAudit user={user} isMobile={isMobile} newErrorCounts={gembaNotifCounts} setGembaNotifCounts={setGembaNotifCounts} /></ErrorBoundary>}</div>
+                <div style={tabStyle(0)}>{tab === 0 && <ErrorBoundary fallbackTitle="Lỗi tải Gemba Checklist"><DailyAudit user={user} isMobile={isMobile} newErrorCounts={gembaNotifCounts} setGembaNotifCounts={setGembaNotifCounts} /></ErrorBoundary>}</div>
               )}
               {!isRestrictedRole && (
-                <div style={tabStyle(1)}>{shouldMount(1) && <ErrorBoundary fallbackTitle="Lỗi tải Tự Gemba"><Gemba user={user} isMobile={isMobile} newLogCounts={tuGembaNotifCounts} setTuGembaNotifCounts={setTuGembaNotifCounts} /></ErrorBoundary>}</div>
+                <div style={tabStyle(1)}>{tab === 1 && <ErrorBoundary fallbackTitle="Lỗi tải Tự Gemba"><Gemba user={user} isMobile={isMobile} newLogCounts={tuGembaNotifCounts} setTuGembaNotifCounts={setTuGembaNotifCounts} /></ErrorBoundary>}</div>
               )}
               
               {/* EHS Committee Tab */}
-              <div style={tabStyle(2)}>{shouldMount(2) && <ErrorBoundary fallbackTitle="Lỗi tải EHS Committee"><EhsCommittee user={user} isMobile={isMobile} activeSubTab={ehsActiveSubTab} setActiveSubTab={setEhsActiveSubTab} /></ErrorBoundary>}</div>
+              <div style={tabStyle(2)}>{tab === 2 && <ErrorBoundary fallbackTitle="Lỗi tải EHS Committee"><EhsCommittee user={user} isMobile={isMobile} activeSubTab={ehsActiveSubTab} setActiveSubTab={setEhsActiveSubTab} /></ErrorBoundary>}</div>
               
-              <div style={tabStyle(3)}>{shouldMount(3) && <ErrorBoundary fallbackTitle="Lỗi tải Báo cơm"><BaoCom user={user} isMobile={isMobile} /></ErrorBoundary>}</div>
-              <div style={tabStyle(4)}>{shouldMount(4) && <ErrorBoundary fallbackTitle="Lỗi tải Quản lý người dùng">{rolesNormalized.includes("admin") ? <UserManager user={user} isMobile={isMobile} /> : <div style={{padding:20}}>Access Denied</div>}</ErrorBoundary>}</div>
-              <div style={tabStyle(5)}>{shouldMount(5) && <ErrorBoundary fallbackTitle="Lỗi tải Tài liệu"><DocumentManager user={user} isMobile={isMobile} /></ErrorBoundary>}</div>
+              <div style={tabStyle(3)}>{tab === 3 && <ErrorBoundary fallbackTitle="Lỗi tải Báo cơm"><BaoCom user={user} isMobile={isMobile} /></ErrorBoundary>}</div>
+              <div style={tabStyle(4)}>{tab === 4 && <ErrorBoundary fallbackTitle="Lỗi tải Quản lý người dùng">{rolesNormalized.includes("admin") ? <UserManager user={user} isMobile={isMobile} /> : <div style={{padding:20}}>Access Denied</div>}</ErrorBoundary>}</div>
+              <div style={tabStyle(5)}>{tab === 5 && <ErrorBoundary fallbackTitle="Lỗi tải Tài liệu"><DocumentManager user={user} isMobile={isMobile} /></ErrorBoundary>}</div>
             </Suspense>
           </div>
         </div>
